@@ -143,7 +143,9 @@
                 lastUpdated = Date(timeIntervalSince1970: Double(content.lastUpdated))
             }
             let uniqueProfileName = try await ProfileManager.uniqueName(content.name)
-            try await ProfileManager.create(Profile(name: uniqueProfileName, type: type, path: profileConfig.relativePath, remoteURL: content.remotePath, autoUpdate: content.autoUpdate, lastUpdated: lastUpdated))
+            let profile = Profile(name: uniqueProfileName, type: type, path: profileConfig.relativePath, remoteURL: content.remotePath, autoUpdate: content.autoUpdate, lastUpdated: lastUpdated)
+            try await ProfileManager.create(profile)
+            await SharedPreferences.selectedProfileID.set(profile.mustID)
             await reset()
             await MainActor.run {
                 environments.profileUpdate.send()

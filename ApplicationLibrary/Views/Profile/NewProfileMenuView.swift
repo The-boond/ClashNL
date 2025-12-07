@@ -63,13 +63,15 @@ public struct NewProfileMenuView: View {
                 handleFileImport(result)
             }
             .sheet(isPresented: $showNewProfile) {
-                NewProfileView(onSuccess: { _ in
+                NewProfileView(onSuccess: { profile in
+                    await SharedPreferences.selectedProfileID.set(profile.mustID)
                     dismiss()
                 })
                 .environmentObject(environments)
             }
             .sheet(item: $localImportRequest) { request in
-                NewProfileView(localImportRequest: request, onSuccess: { _ in
+                NewProfileView(localImportRequest: request, onSuccess: { profile in
+                    await SharedPreferences.selectedProfileID.set(profile.mustID)
                     dismiss()
                 })
                 .environmentObject(environments)
@@ -80,11 +82,17 @@ public struct NewProfileMenuView: View {
     private var otherBody: some View {
         Group {
             if let request = importRequest {
-                NewProfileView(request)
-                    .environmentObject(environments)
+                NewProfileView(request, onSuccess: { profile in
+                    await SharedPreferences.selectedProfileID.set(profile.mustID)
+                    dismiss()
+                })
+                .environmentObject(environments)
             } else if let request = localImportRequest {
-                NewProfileView(localImportRequest: request)
-                    .environmentObject(environments)
+                NewProfileView(localImportRequest: request, onSuccess: { profile in
+                    await SharedPreferences.selectedProfileID.set(profile.mustID)
+                    dismiss()
+                })
+                .environmentObject(environments)
             } else {
                 menuContent
             }
@@ -156,8 +164,11 @@ public struct NewProfileMenuView: View {
                     }
                 #else
                     FormNavigationLink {
-                        NewProfileView()
-                            .environmentObject(environments)
+                        NewProfileView(onSuccess: { profile in
+                            await SharedPreferences.selectedProfileID.set(profile.mustID)
+                            dismiss()
+                        })
+                        .environmentObject(environments)
                     } label: {
                         Label("Create Manually", systemImage: "square.and.pencil")
                     }

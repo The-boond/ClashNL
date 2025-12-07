@@ -42,7 +42,8 @@ public extension LibboxProfileContent {
         return content!
     }
 
-    func importProfile() async throws {
+    @discardableResult
+    func importProfile() async throws -> Profile {
         let nextProfileID = try await ProfileManager.nextID()
         let profileConfigDirectory = FilePath.sharedDirectory.appendingPathComponent("configs", isDirectory: true)
         try FileManager.default.createDirectory(at: profileConfigDirectory, withIntermediateDirectories: true)
@@ -53,7 +54,10 @@ public extension LibboxProfileContent {
             lastUpdatedAt = Date(timeIntervalSince1970: Double(lastUpdated))
         }
         let uniqueProfileName = try await ProfileManager.uniqueName(name)
-        try await ProfileManager.create(Profile(name: uniqueProfileName, type: ProfileType(rawValue: Int(type))!, path: profileConfig.relativePath, remoteURL: remotePath, autoUpdate: autoUpdate, autoUpdateInterval: autoUpdateInterval, lastUpdated: lastUpdatedAt))
+        let profile = Profile(name: uniqueProfileName, type: ProfileType(rawValue: Int(type))!, path: profileConfig.relativePath, remoteURL: remotePath, autoUpdate: autoUpdate, autoUpdateInterval: autoUpdateInterval, lastUpdated: lastUpdatedAt)
+        try await ProfileManager.create(profile)
+        await SharedPreferences.selectedProfileID.set(profile.mustID)
+        return profile
     }
 
     func generateShareFile() throws -> URL {
