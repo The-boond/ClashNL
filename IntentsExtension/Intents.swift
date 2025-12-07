@@ -38,9 +38,7 @@ struct StartServiceIntent: AppIntent {
             }
             try LibboxNewStandaloneCommandClient()!.serviceReload()
         } else if extensionProfile.status.isConnected {
-            try await extensionProfile.stop()
-            try await Task.sleep(nanoseconds: UInt64(100 * Double(NSEC_PER_MSEC)))
-            try await extensionProfile.start()
+            try await extensionProfile.restart()
         } else {
             try await extensionProfile.start()
         }
@@ -65,9 +63,7 @@ struct RestartServiceIntent: AppIntent {
         if extensionProfile.status == .connected {
             try LibboxNewStandaloneCommandClient()!.serviceReload()
         } else if extensionProfile.status.isConnected {
-            try await extensionProfile.stop()
-            try await Task.sleep(nanoseconds: UInt64(100 * Double(NSEC_PER_MSEC)))
-            try await extensionProfile.start()
+            try await extensionProfile.restart()
         } else {
             try await extensionProfile.start()
         }

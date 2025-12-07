@@ -243,7 +243,7 @@ import SwiftUI
 
         @ToolbarContentBuilder private var toolbar: some ToolbarContent {
             #if os(tvOS)
-            ToolbarItemGroup(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
                     navigationButtons
                 }
             #endif

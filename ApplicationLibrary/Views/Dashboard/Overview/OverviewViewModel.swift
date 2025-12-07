@@ -32,17 +32,7 @@ public final class OverviewViewModel: BaseViewModel {
                 try LibboxNewStandaloneCommandClient()!.setSystemProxyEnabled(enabled)
             } else {
                 await MainActor.run { reasserting = true }
-                try await profile.stop()
-
-                var waitSeconds = 0
-                while await profile.status != .disconnected {
-                    try await Task.sleep(nanoseconds: NSEC_PER_SEC)
-                    waitSeconds += 1
-                    if waitSeconds >= 5 {
-                        throw NSError(domain: "Restart service timeout", code: 0)
-                    }
-                }
-                try await profile.start()
+                try await profile.restart()
                 await MainActor.run { reasserting = false }
             }
         } catch {

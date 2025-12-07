@@ -108,6 +108,19 @@ public class ExtensionProfile: ObservableObject {
         manager.connection.stopVPNTunnel()
     }
 
+    public func restart() async throws {
+        try await stop()
+        var waitSeconds = 0
+        while await MainActor.run(body: { status }) != .disconnected {
+            try await Task.sleep(nanoseconds: NSEC_PER_SEC)
+            waitSeconds += 1
+            if waitSeconds >= 5 {
+                throw NSError(domain: "Restart service timeout", code: 0)
+            }
+        }
+        try await start()
+    }
+
     public static func load() async throws -> ExtensionProfile? {
         let managers = try await NETunnelProviderManager.loadAllFromPreferences()
         if managers.isEmpty {
