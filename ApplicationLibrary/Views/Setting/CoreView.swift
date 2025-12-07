@@ -4,7 +4,9 @@ import SwiftUI
 
 @MainActor
 public struct CoreView: View {
+    @EnvironmentObject private var environments: ExtensionEnvironments
     @State private var isLoading = true
+    @State private var alert: AlertState?
 
     @State private var disableDeprecatedWarnings = false
 
@@ -42,7 +44,7 @@ public struct CoreView: View {
                         #endif
                         FormButton(role: .destructive) {
                             Task {
-                                await destroyWorkingDirectory()
+                                await confirmDestroyWorkingDirectory()
                             }
                         } label: {
                             Label("Destroy", systemImage: "trash.fill")
@@ -53,6 +55,7 @@ public struct CoreView: View {
             }
         }
         .navigationTitle("Core")
+        .alert($alert)
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -82,6 +85,28 @@ public struct CoreView: View {
             self.disableDeprecatedWarnings = disableDeprecatedWarnings
             self.dataSize = dataSize
         }
+    }
+
+    private func confirmDestroyWorkingDirectory() async {
+        if environments.extensionProfile?.status.isConnected == true {
+            alert = AlertState(
+                title: String(localized: "Service is Running"),
+                message: String(localized: "The service must be stopped before destroying the working directory."),
+                primaryButton: .destructive(String(localized: "Stop Service and Continue")) { [self] in
+                    Task {
+                        await stopServiceAndDestroy()
+                    }
+                },
+                secondaryButton: .cancel()
+            )
+        } else {
+            await destroyWorkingDirectory()
+        }
+    }
+
+    private func stopServiceAndDestroy() async {
+        try? await environments.extensionProfile?.stop()
+        await destroyWorkingDirectory()
     }
 
     private nonisolated func destroyWorkingDirectory() async {

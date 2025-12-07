@@ -1629,6 +1629,16 @@
         }
       }
     },
+    "Service is Running" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "服务正在运行"
+          }
+        }
+      }
+    },
     "Service Log" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1812,6 +1822,16 @@
         }
       }
     },
+    "Stop Service and Continue" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "停止服务并继续"
+          }
+        }
+      }
+    },
     "System Extension" : {
       "localizations" : {
         "zh-Hans" : {
@@ -1871,6 +1891,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "该二维码不包含有效的配置导入链接。"
+          }
+        }
+      }
+    },
+    "The service must be stopped before destroying the working directory." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "必须先停止服务才能清理工作目录。"
           }
         }
       }
