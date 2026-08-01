@@ -1,0 +1,23 @@
+ClashNl for Apple platforms
+===========================
+
+This directory is a modified distribution of sing-box-for-apple and links a
+modified sing-box Libbox framework. The upstream projects are Copyright (C)
+SagerNet contributors and licensed under GNU General Public License version 3
+or later.
+
+Upstream sources:
+  https://github.com/SagerNet/sing-box-for-apple
+  https://github.com/SagerNet/sing-box
+
+The client license is in LICENSE. The pinned core's license notice, including
+its naming/association condition, is preserved in LICENSES/sing-box.txt.
+
+ClashNl adds an original Clash/Mihomo YAML compatibility layer, independent
+branding, profile import integration, and first-run privacy disclosures.
+Changes are distributed under the same GPL terms. Paid distribution does not
+remove recipients' rights to obtain, study, modify, and redistribute the
+corresponding source.
+
+ClashNl is an independent project. It is not affiliated with SagerNet,
+MetaCubeX, Dreamacro, or Shadowrocket.

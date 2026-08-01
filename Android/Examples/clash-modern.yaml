@@ -1,0 +1,66 @@
+ipv6: false
+mode: rule
+log-level: info
+
+dns:
+  enable: true
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  nameserver:
+    - https://1.1.1.1/dns-query
+
+proxies:
+  - name: VLESS-Reality
+    type: vless
+    server: example.com
+    port: 443
+    uuid: 11111111-1111-1111-1111-111111111111
+    network: grpc
+    tls: true
+    servername: www.example.com
+    client-fingerprint: chrome
+    reality-opts:
+      public-key: HtNpnLgHDsYBvlyw5eS1GklGAqfD0L6gElTbaBzTEHY
+      short-id: "01234567"
+    grpc-opts:
+      grpc-service-name: tunnel
+
+  - name: Hysteria2
+    type: hysteria2
+    server: 192.0.2.2
+    port: 443
+    password: PASSWORD
+    obfs: salamander
+    obfs-password: OBFS_PASSWORD
+    skip-cert-verify: true
+
+  - name: TUIC-v5
+    type: tuic
+    server: 192.0.2.3
+    port: 443
+    uuid: 22222222-2222-2222-2222-222222222222
+    password: PASSWORD
+    congestion-controller: bbr
+    reduce-rtt: true
+
+  - name: AnyTLS
+    type: anytls
+    server: 192.0.2.4
+    port: 443
+    password: PASSWORD
+    servername: www.example.com
+
+proxy-groups:
+  - name: Proxy
+    type: select
+    proxies:
+      - VLESS-Reality
+      - Hysteria2
+      - TUIC-v5
+      - AnyTLS
+      - DIRECT
+
+rules:
+  - DOMAIN-SUFFIX,example.com,Proxy
+  - GEOIP,CN,DIRECT
+  - MATCH,Proxy

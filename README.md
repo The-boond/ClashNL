@@ -1,26 +1,38 @@
-# sing-box-for-apple
+# ClashNL
 
-Experimental iOS/macOS/tvOS client for sing-box, the universal proxy platform.
+项目已经按平台拆分为两个自包含工程：
 
-## Documentation
-
-[SFI](https://sing-box.sagernet.org/installation/clients/sfi/) | [SFM](https://sing-box.sagernet.org/installation/clients/sfm/)
-
-## License
-
+```text
+Android/    Android VpnService 客户端、Libbox 构建脚本、转换器和示例
+iOS/        iOS/macOS/tvOS Apple 客户端、Xcode 工程、Libbox 脚本和示例
 ```
-Copyright (C) 2022 by nekohasekai <contact-sagernet@sekai.icu>
 
-This program is free software: you can redistribute it and/or modify
-it under the terms of the GNU General Public License as published by
-the Free Software Foundation, either version 3 of the License, or
-(at your option) any later version.
+## Android
 
-This program is distributed in the hope that it will be useful,
-but WITHOUT ANY WARRANTY; without even the implied warranty of
-MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-GNU General Public License for more details.
+进入 [Android/README.md](Android/README.md)。
 
-You should have received a copy of the GNU General Public License
-along with this program. If not, see <http://www.gnu.org/licenses/>.
+```powershell
+cd D:\Desktop\iosClashNL\Android
+.\gradlew.bat :app:assembleOtherDebug
 ```
+
+## iOS
+
+进入 [iOS/README.md](iOS/README.md)。
+
+```bash
+cd iOS
+bash scripts/verify-core.sh
+bash scripts/build-libbox.sh
+open sing-box.xcodeproj
+```
+
+两个平台各自保存 `Core/`、`Examples/`、`scripts/`、隐私说明和品牌源图，
+因此可以单独复制、构建和维护。仓库根目录只保留版本控制、CI、总览和总许可证。
+
+ClashNL 主 Logo：
+
+- [Android/Branding/ClashNL-logo-1024.png](Android/Branding/ClashNL-logo-1024.png)
+- [iOS/Branding/ClashNL-logo-1024.png](iOS/Branding/ClashNL-logo-1024.png)
+
+代码按 [GPL-3.0-or-later](LICENSE) 分发。

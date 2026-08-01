@@ -1,0 +1,14 @@
+/.build/
+/.build-*.json
+/build/
+/Libbox.xcframework/
+*.xcuserstate
+xcuserdata/
+.DS_Store
+fastlane/report.xml
+fastlane/test_output/
+fastlane/.bundle/
+fastlane/.cache/
+__pycache__/
+*.py[cod]
+sing-box.xcodeproj/project.pbxproj.back

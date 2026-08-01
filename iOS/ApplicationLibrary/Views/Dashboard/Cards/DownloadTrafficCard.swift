@@ -1,0 +1,45 @@
+import Libbox
+import Library
+import SwiftUI
+
+public struct DownloadTrafficCard: View {
+    @EnvironmentObject private var commandClient: CommandClient
+
+    public init() {}
+
+    public var body: some View {
+        DashboardCardView(title: "", isHalfWidth: true) {
+            VStack(alignment: .leading, spacing: 8) {
+                DashboardCardHeader(icon: "arrow.down", title: "Download", accent: .blue)
+
+                if Variant.screenshotMode {
+                    Text(verbatim: "249 MB/s")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                    Text(verbatim: "5.6 GB")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else if let message = commandClient.status, message.trafficAvailable {
+                    Text(verbatim: "\(LibboxFormatBytes(message.downlink))/s")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                    Text(LibboxFormatBytes(message.downlinkTotal))
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(verbatim: "...")
+                        .font(.title2)
+                        .fontWeight(.medium)
+                    Text(verbatim: "...")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                TrafficLineChart(
+                    data: commandClient.downlinkHistory,
+                    lineColor: .blue
+                )
+            }
+        }
+    }
+}
