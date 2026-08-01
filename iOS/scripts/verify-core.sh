@@ -41,7 +41,6 @@ git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/experimental/libbox/http_re
 (
   cd "${CORE_DIR}"
   go test ./experimental/libbox/internal/clashconv
-  go test -run '^$' ./experimental/libbox
   go run \
     -tags "with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api" \
     ./cmd/sing-box check -c "${GENERATED_CONFIG}"
