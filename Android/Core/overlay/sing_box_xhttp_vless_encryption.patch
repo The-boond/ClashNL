@@ -1,0 +1,209 @@
+diff --git a/constant/v2ray.go b/constant/v2ray.go
+index c3089a6c..1811df5f 100644
+--- a/constant/v2ray.go
++++ b/constant/v2ray.go
+@@ -6,4 +6,5 @@ const (
+ 	V2RayTransportTypeQUIC        = "quic"
+ 	V2RayTransportTypeGRPC        = "grpc"
+ 	V2RayTransportTypeHTTPUpgrade = "httpupgrade"
++	V2RayTransportTypeXHTTP       = "xhttp"
+ )
+diff --git a/option/v2ray_transport.go b/option/v2ray_transport.go
+index 1c58b974..390be927 100644
+--- a/option/v2ray_transport.go
++++ b/option/v2ray_transport.go
+@@ -12,12 +12,13 @@ import (
+ )
+ 
+ type _V2RayTransportOptions struct {
+-	Type               string                  `json:"type" enum:"http,ws,quic,grpc,httpupgrade"`
++	Type               string                  `json:"type" enum:"http,ws,quic,grpc,httpupgrade,xhttp"`
+ 	HTTPOptions        V2RayHTTPOptions        `json:"-"`
+ 	WebsocketOptions   V2RayWebsocketOptions   `json:"-"`
+ 	QUICOptions        V2RayQUICOptions        `json:"-"`
+ 	GRPCOptions        V2RayGRPCOptions        `json:"-"`
+ 	HTTPUpgradeOptions V2RayHTTPUpgradeOptions `json:"-"`
++	XHTTPOptions       V2RayXHTTPOptions       `json:"-"`
+ }
+ 
+ type V2RayTransportOptions _V2RayTransportOptions
+@@ -35,6 +36,8 @@ func (o V2RayTransportOptions) MarshalJSON() ([]byte, error) {
+ 		v = o.GRPCOptions
+ 	case C.V2RayTransportTypeHTTPUpgrade:
+ 		v = o.HTTPUpgradeOptions
++	case C.V2RayTransportTypeXHTTP:
++		v = o.XHTTPOptions
+ 	case "":
+ 		return nil, E.New("missing transport type")
+ 	default:
+@@ -60,6 +63,8 @@ func (o *V2RayTransportOptions) UnmarshalJSON(bytes []byte) error {
+ 		v = &o.GRPCOptions
+ 	case C.V2RayTransportTypeHTTPUpgrade:
+ 		v = &o.HTTPUpgradeOptions
++	case C.V2RayTransportTypeXHTTP:
++		v = &o.XHTTPOptions
+ 	default:
+ 		return E.New("unknown transport type: " + o.Type)
+ 	}
+@@ -78,6 +83,7 @@ func (o V2RayTransportOptions) DescribeSchema(builder schema.Builder) (*schema.N
+ 			{Value: C.V2RayTransportTypeQUIC, StructType: reflect.TypeFor[V2RayQUICOptions]()},
+ 			{Value: C.V2RayTransportTypeGRPC, StructType: reflect.TypeFor[V2RayGRPCOptions]()},
+ 			{Value: C.V2RayTransportTypeHTTPUpgrade, StructType: reflect.TypeFor[V2RayHTTPUpgradeOptions]()},
++			{Value: C.V2RayTransportTypeXHTTP, StructType: reflect.TypeFor[V2RayXHTTPOptions]()},
+ 		}, nil)
+ 	})
+ }
+@@ -113,3 +119,24 @@ type V2RayHTTPUpgradeOptions struct {
+ 	Path    string               `json:"path,omitempty"`
+ 	Headers badoption.HTTPHeader `json:"headers,omitempty"`
+ }
++
++type V2RayXHTTPOptions struct {
++	Host            string                  `json:"host,omitempty"`
++	Path            string                  `json:"path,omitempty"`
++	Mode            string                  `json:"mode,omitempty"`
++	Headers         badoption.HTTPHeader    `json:"headers,omitempty"`
++	NoGRPCHeader    bool                    `json:"no_grpc_header,omitempty"`
++	XPaddingBytes   string                  `json:"x_padding_bytes,omitempty"`
++	KeepAlivePeriod badoption.Duration      `json:"keep_alive_period,omitempty"`
++	PingTimeout     badoption.Duration      `json:"ping_timeout,omitempty"`
++	ReuseSettings   *V2RayXHTTPReuseOptions `json:"reuse_settings,omitempty"`
++}
++
++type V2RayXHTTPReuseOptions struct {
++	MaxConcurrency   string `json:"max_concurrency,omitempty"`
++	MaxConnections   string `json:"max_connections,omitempty"`
++	CMaxReuseTimes   string `json:"c_max_reuse_times,omitempty"`
++	HMaxRequestTimes string `json:"h_max_request_times,omitempty"`
++	HMaxReusableSecs string `json:"h_max_reusable_secs,omitempty"`
++	HKeepAlivePeriod string `json:"h_keep_alive_period,omitempty"`
++}
+diff --git a/option/vless.go b/option/vless.go
+index 5acf2aee..5c65dfac 100644
+--- a/option/vless.go
++++ b/option/vless.go
+@@ -17,9 +17,10 @@ type VLESSUser struct {
+ type VLESSOutboundOptions struct {
+ 	DialerOptions
+ 	ServerOptions
+-	UUID    string      `json:"uuid"`
+-	Flow    string      `json:"flow,omitempty"`
+-	Network NetworkList `json:"network,omitempty"`
++	UUID       string      `json:"uuid"`
++	Flow       string      `json:"flow,omitempty"`
++	Encryption string      `json:"encryption,omitempty"`
++	Network    NetworkList `json:"network,omitempty"`
+ 	OutboundTLSOptionsContainer
+ 	Multiplex      *OutboundMultiplexOptions `json:"multiplex,omitempty"`
+ 	Transport      *V2RayTransportOptions    `json:"transport,omitempty"`
+diff --git a/protocol/vless/outbound.go b/protocol/vless/outbound.go
+index 007c78f3..133fa9b6 100644
+--- a/protocol/vless/outbound.go
++++ b/protocol/vless/outbound.go
+@@ -13,6 +13,7 @@ import (
+ 	"github.com/sagernet/sing-box/log"
+ 	"github.com/sagernet/sing-box/option"
+ 	"github.com/sagernet/sing-box/transport/v2ray"
++	"github.com/sagernet/sing-box/transport/vlessencryption"
+ 	"github.com/sagernet/sing-vmess/packetaddr"
+ 	"github.com/sagernet/sing-vmess/vless"
+ 	"github.com/sagernet/sing/common"
+@@ -31,16 +32,17 @@ var _ adapter.OutboundWithMultiplex = (*Outbound)(nil)
+ 
+ type Outbound struct {
+ 	outbound.Adapter
+-	logger          logger.ContextLogger
+-	dialer          N.Dialer
+-	client          *vless.Client
+-	serverAddr      M.Socksaddr
+-	multiplexDialer *mux.Client
+-	tlsConfig       tls.Config
+-	tlsDialer       tls.Dialer
+-	transport       adapter.V2RayClientTransport
+-	packetAddr      bool
+-	xudp            bool
++	logger           logger.ContextLogger
++	dialer           N.Dialer
++	client           *vless.Client
++	serverAddr       M.Socksaddr
++	multiplexDialer  *mux.Client
++	tlsConfig        tls.Config
++	tlsDialer        tls.Dialer
++	transport        adapter.V2RayClientTransport
++	encryptionClient *vlessencryption.Client
++	packetAddr       bool
++	xudp             bool
+ }
+ 
+ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextLogger, tag string, options option.VLESSOutboundOptions) (adapter.Outbound, error) {
+@@ -54,6 +56,10 @@ func NewOutbound(ctx context.Context, router adapter.Router, logger log.ContextL
+ 		dialer:     outboundDialer,
+ 		serverAddr: options.ServerOptions.Build(),
+ 	}
++	outbound.encryptionClient, err = vlessencryption.NewClient(options.Encryption)
++	if err != nil {
++		return nil, E.Cause(err, "create VLESS encryption client")
++	}
+ 	if options.TLS != nil {
+ 		outbound.tlsConfig, err = tls.NewClientWithOptions(tls.ClientOptions{
+ 			Context:       ctx,
+@@ -164,6 +170,14 @@ func (h *vlessDialer) DialContext(ctx context.Context, network string, destinati
+ 	if err != nil {
+ 		return nil, err
+ 	}
++	if h.encryptionClient != nil {
++		encryptedConn, encryptionErr := h.encryptionClient.Handshake(conn)
++		if encryptionErr != nil {
++			common.Close(conn)
++			return nil, E.Cause(encryptionErr, "perform VLESS encryption handshake")
++		}
++		conn = encryptedConn
++	}
+ 	switch N.NetworkName(network) {
+ 	case N.NetworkTCP:
+ 		h.logger.InfoContext(ctx, "outbound connection to ", destination)
+@@ -207,6 +221,14 @@ func (h *vlessDialer) ListenPacket(ctx context.Context, destination M.Socksaddr)
+ 		common.Close(conn)
+ 		return nil, err
+ 	}
++	if h.encryptionClient != nil {
++		encryptedConn, encryptionErr := h.encryptionClient.Handshake(conn)
++		if encryptionErr != nil {
++			common.Close(conn)
++			return nil, E.Cause(encryptionErr, "perform VLESS encryption handshake")
++		}
++		conn = encryptedConn
++	}
+ 	if h.xudp {
+ 		return h.client.DialEarlyXUDPPacketConn(conn, destination)
+ 	} else if h.packetAddr {
+diff --git a/transport/v2ray/transport.go b/transport/v2ray/transport.go
+index ab52f55e..e6a38809 100644
+--- a/transport/v2ray/transport.go
++++ b/transport/v2ray/transport.go
+@@ -10,6 +10,7 @@ import (
+ 	"github.com/sagernet/sing-box/transport/v2rayhttp"
+ 	"github.com/sagernet/sing-box/transport/v2rayhttpupgrade"
+ 	"github.com/sagernet/sing-box/transport/v2raywebsocket"
++	"github.com/sagernet/sing-box/transport/v2rayxhttp"
+ 	E "github.com/sagernet/sing/common/exceptions"
+ 	"github.com/sagernet/sing/common/logger"
+ 	M "github.com/sagernet/sing/common/metadata"
+@@ -39,6 +40,8 @@ func NewServerTransport(ctx context.Context, logger logger.ContextLogger, option
+ 		return NewGRPCServer(ctx, logger, options.GRPCOptions, tlsConfig, handler)
+ 	case C.V2RayTransportTypeHTTPUpgrade:
+ 		return v2rayhttpupgrade.NewServer(ctx, logger, options.HTTPUpgradeOptions, tlsConfig, handler)
++	case C.V2RayTransportTypeXHTTP:
++		return nil, E.New("XHTTP server transport is not included in this client build")
+ 	default:
+ 		return nil, E.New("unknown transport type: " + options.Type)
+ 	}
+@@ -62,6 +65,8 @@ func NewClientTransport(ctx context.Context, dialer N.Dialer, serverAddr M.Socks
+ 		return NewQUICClient(ctx, dialer, serverAddr, options.QUICOptions, tlsConfig)
+ 	case C.V2RayTransportTypeHTTPUpgrade:
+ 		return v2rayhttpupgrade.NewClient(ctx, dialer, serverAddr, options.HTTPUpgradeOptions, tlsConfig)
++	case C.V2RayTransportTypeXHTTP:
++		return v2rayxhttp.NewClient(ctx, dialer, serverAddr, options.XHTTPOptions, tlsConfig)
+ 	default:
+ 		return nil, E.New("unknown transport type: " + options.Type)
+ 	}

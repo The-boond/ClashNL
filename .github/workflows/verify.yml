@@ -1,0 +1,43 @@
+name: Verify ClashNl platform cores
+
+on:
+  push:
+    paths:
+      - "Android/Core/**"
+      - "Android/Examples/**"
+      - "Android/scripts/verify-core.sh"
+      - "iOS/Core/**"
+      - "iOS/Examples/**"
+      - "iOS/scripts/verify-core.sh"
+      - ".github/workflows/verify.yml"
+  pull_request:
+    paths:
+      - "Android/Core/**"
+      - "Android/Examples/**"
+      - "Android/scripts/verify-core.sh"
+      - "iOS/Core/**"
+      - "iOS/Examples/**"
+      - "iOS/scripts/verify-core.sh"
+      - ".github/workflows/verify.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  converter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        project:
+          - Android
+          - iOS
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: ${{ matrix.project }}/Core/clashconv/go.mod
+          cache-dependency-path: ${{ matrix.project }}/Core/clashconv/go.sum
+      - name: Verify ${{ matrix.project }} converter and pinned core
+        run: bash "${{ matrix.project }}/scripts/verify-core.sh"
