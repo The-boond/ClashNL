@@ -54,6 +54,17 @@ class LatencyRepositoryTest {
     }
 
     @Test
+    fun nodeResultLookupSpansNetworks() {
+        val target = target(network = "wifi:1")
+        LatencyRepository.put(success(target, testedAt = 5_000L))
+
+        assertEquals(true, LatencyRepository.hasResultForNode(1, "GROUP", "NODE"))
+        assertEquals(false, LatencyRepository.hasResultForNode(2, "GROUP", "NODE"))
+        assertEquals(false, LatencyRepository.hasResultForNode(1, "OTHER_GROUP", "NODE"))
+        assertEquals(false, LatencyRepository.hasResultForNode(1, "GROUP", "OTHER_NODE"))
+    }
+
+    @Test
     fun profileUpdateAndNodeDeletionPruneOnlyInactiveKeys() {
         val first = target(profile = 7, group = "GROUP", node = "NODE_A", network = "wifi:1")
         val second = target(profile = 7, group = "GROUP", node = "NODE_B", network = "wifi:1")

@@ -457,28 +457,31 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
                     } else {
                         item.urlTestTime
                     }
-                    val key = LatencyKey(profileId, group.tag, item.tag, networkKey)
-                    val existing = LatencyRepository.get(key)
-                    if (existing == null || existing.testedAt != testedAt || existing.medianMs != item.urlTestDelay.toLong()) {
-                        LatencyRepository.put(
-                            NodeLatencyResult(
-                                profileId = profileId,
-                                groupTag = group.tag,
-                                nodeTag = item.tag,
-                                method = LatencyTestMethod.PROXY_HTTP_HEAD,
-                                samplesMs = listOf(item.urlTestDelay.toLong()),
-                                medianMs = item.urlTestDelay.toLong(),
-                                minMs = item.urlTestDelay.toLong(),
-                                maxMs = item.urlTestDelay.toLong(),
-                                firstConnectMs = item.urlTestDelay.toLong(),
-                                failedSamples = 0,
-                                testedAt = testedAt,
-                                networkKey = networkKey,
-                                source = LatencyResultSource.LIVE_CORE,
-                                status = LatencyResultStatus.SUCCESS,
-                            ),
-                        )
+                    // Core history has no network identity. Once this app has a
+                    // result for the node, retain that identity instead of
+                    // re-labeling historical Core data as a fresh result after
+                    // a network switch or service restart.
+                    if (LatencyRepository.hasResultForNode(profileId, group.tag, item.tag)) {
+                        return@forEach
                     }
+                    LatencyRepository.put(
+                        NodeLatencyResult(
+                            profileId = profileId,
+                            groupTag = group.tag,
+                            nodeTag = item.tag,
+                            method = LatencyTestMethod.PROXY_HTTP_HEAD,
+                            samplesMs = listOf(item.urlTestDelay.toLong()),
+                            medianMs = item.urlTestDelay.toLong(),
+                            minMs = item.urlTestDelay.toLong(),
+                            maxMs = item.urlTestDelay.toLong(),
+                            firstConnectMs = item.urlTestDelay.toLong(),
+                            failedSamples = 0,
+                            testedAt = testedAt,
+                            networkKey = networkKey,
+                            source = LatencyResultSource.LIVE_CORE,
+                            status = LatencyResultStatus.SUCCESS,
+                        ),
+                    )
                 }
             }
             LatencyRepository.prune(
