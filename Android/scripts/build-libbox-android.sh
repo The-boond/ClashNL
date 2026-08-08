@@ -65,6 +65,10 @@ git -C "${CORE_DIR}" apply --check "${ROOT_DIR}/Core/overlay/experimental/libbox
 git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/experimental/libbox/http_response_headers.patch"
 git -C "${CORE_DIR}" apply --check "${ROOT_DIR}/Core/overlay/sing_box_xhttp_vless_encryption.patch"
 git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/sing_box_xhttp_vless_encryption.patch"
+git -C "${CORE_DIR}" apply --check "${ROOT_DIR}/Core/overlay/daemon/started_service_urltest_result.patch"
+git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/daemon/started_service_urltest_result.patch"
+git -C "${CORE_DIR}" apply --check "${ROOT_DIR}/Core/overlay/experimental/libbox/command_server_urltest_result.patch"
+git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/experimental/libbox/command_server_urltest_result.patch"
 
 (
   cd "${CORE_DIR}"
