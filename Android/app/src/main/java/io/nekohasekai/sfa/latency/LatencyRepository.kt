@@ -35,6 +35,12 @@ object LatencyRepository {
 
     fun get(key: LatencyKey): NodeLatencyResult? = synchronized(access) { values[key] }
 
+    fun hasResultForNode(profileId: Long, groupTag: String, nodeTag: String): Boolean = synchronized(access) {
+        values.keys.any { key ->
+            key.profileId == profileId && key.groupTag == groupTag && key.nodeTag == nodeTag
+        }
+    }
+
     fun getFresh(target: LatencyTarget, now: Long = System.currentTimeMillis()): NodeLatencyResult? = synchronized(access) {
         values[target.key]?.takeIf { it.isFresh(now) }
     }
