@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.OutboundGroupItem
 import io.nekohasekai.libbox.OutboundGroupItemIterator
+import io.nekohasekai.sfa.latency.NodeLatencyResult
 
 data class Group(
     val tag: String,
@@ -24,7 +25,13 @@ data class Group(
 }
 
 @Immutable
-data class GroupItem(val tag: String, val type: String, val urlTestTime: Long, val urlTestDelay: Int) {
+data class GroupItem(
+    val tag: String,
+    val type: String,
+    val urlTestTime: Long,
+    val urlTestDelay: Int,
+    val latency: NodeLatencyResult? = null,
+) {
     constructor(item: OutboundGroupItem) : this(
         item.tag,
         item.type,
