@@ -51,7 +51,10 @@ git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/experimental/libbox/command
 (
   cd "${CORE_DIR}"
   go test ./experimental/libbox/internal/clashconv
-  go test ./daemon ./experimental/libbox
+  go test ./daemon
+  # The libbox test binary links Linux-incompatible oomprofile runtime internals.
+  # A package build still validates the offline probe overlay without that test-only linker path.
+  go build ./experimental/libbox
   go run \
     -tags "with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api" \
     ./cmd/sing-box check -c "${GENERATED_CONFIG}"
