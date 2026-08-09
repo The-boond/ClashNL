@@ -88,6 +88,7 @@
     <string name="account_manage_plans_action">Buy, renew or change plan</string>
     <string name="account_plans_title">Plans and payment</string>
     <string name="account_plan">Subscription plan</string>
+    <string name="account_choose_plan">Choose a plan</string>
     <string name="account_plan_sold_out">Sold out</string>
     <string name="account_plan_unavailable">Purchasing is currently unavailable</string>
     <string name="account_device_value">%1$d devices</string>
