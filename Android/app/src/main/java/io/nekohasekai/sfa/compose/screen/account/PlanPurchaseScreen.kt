@@ -359,6 +359,12 @@ private fun PlanOfferCard(
             if (description.isNotBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
+                    text = stringResource(R.string.account_plan_description),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
                     text = description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -383,14 +389,18 @@ private fun PlanOfferCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
+                Text(
+                    text = stringResource(R.string.account_available_periods),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     plan.prices.forEach { price ->
                         AssistChip(
                             onClick = { onPriceSelected(price) },
                             enabled = enabled,
+                            modifier = Modifier.fillMaxWidth(),
                             label = {
                                 Text(
                                     stringResource(

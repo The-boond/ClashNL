@@ -90,6 +90,8 @@
     <string name="account_plan">订阅套餐</string>
     <string name="account_plan_details">套餐详情</string>
     <string name="account_choose_plan">选择套餐</string>
+    <string name="account_plan_description">套餐说明</string>
+    <string name="account_available_periods">可选周期</string>
     <string name="account_plan_sold_out">已售罄</string>
     <string name="account_plan_unavailable">当前套餐暂不可购买</string>
     <string name="account_device_value">%1$d 台设备</string>

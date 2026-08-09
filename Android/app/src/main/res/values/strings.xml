@@ -90,6 +90,8 @@
     <string name="account_plan">Subscription plan</string>
     <string name="account_plan_details">Plan details</string>
     <string name="account_choose_plan">Choose a plan</string>
+    <string name="account_plan_description">Description</string>
+    <string name="account_available_periods">Available billing cycles</string>
     <string name="account_plan_sold_out">Sold out</string>
     <string name="account_plan_unavailable">Purchasing is currently unavailable</string>
     <string name="account_device_value">%1$d devices</string>
