@@ -111,6 +111,24 @@ public struct ProfileCard: View {
                         QRCodeSheet(profileName: profile.name, remoteURL: remoteURL)
                     }
                 }
+                .sheet(isPresented: $viewModel.showSubscriptionDetails) {
+                    SheetContent("Subscription details") {
+                        if let profile = selectedProfile {
+                            SubscriptionDetailView(
+                                profile: profile,
+                                isUpdating: viewModel.isUpdating,
+                                onUpdate: {
+                                    viewModel.isUpdating = true
+                                    Task {
+                                        await viewModel.updateProfile(profile.origin, environments: environments)
+                                    }
+                                }
+                            )
+                        } else {
+                            Text("Profile not found")
+                        }
+                    }
+                }
             #endif
                 .sheet(
                     isPresented: $viewModel.showQRSShare,
@@ -189,11 +207,28 @@ public struct ProfileCard: View {
                     VStack(alignment: .leading, spacing: 12) {
                         profileInfo(for: profile)
                         actionButtonsRow(for: profile)
+                        #if os(iOS)
+                            detailsButton(for: profile)
+                        #endif
                     }
                 }
             }
         }
     }
+
+    #if os(iOS)
+        private func detailsButton(for profile: ProfilePreview) -> some View {
+            Button {
+                viewModel.showSubscriptionDetails = true
+            } label: {
+                Label("View details", systemImage: "chevron.right")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
+            .accessibilityHint(Text("Open subscription details for \(profile.name)"))
+        }
+    #endif
 
     private var actionButtonSpacing: CGFloat {
         #if os(tvOS)
@@ -518,6 +553,9 @@ extension ProfileCard {
         @Published var showNewProfile = false
         @Published var showProfilePicker = false
         @Published var showQRCode = false
+        #if os(iOS)
+            @Published var showSubscriptionDetails = false
+        #endif
         @Published var showQRSShare = false
         @Published var qrsShareData: Data?
         @Published var qrsShareProfileName: String?
