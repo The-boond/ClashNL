@@ -42,8 +42,8 @@ object XBoardAccountJsonParser {
                 id = it.long("id") ?: 0L,
                 name = it.string("name").orEmpty(),
                 transferLimitBytes = it.long("transfer_enable") ?: transferLimit,
-                deviceLimit = it.int("device_limit"),
-                speedLimitMbps = it.int("speed_limit"),
+                deviceLimit = it.positiveInt("device_limit"),
+                speedLimitMbps = it.positiveInt("speed_limit"),
             )
         }
         return AccountDetails(
@@ -66,8 +66,8 @@ object XBoardAccountJsonParser {
                 name = plan.string("name").orEmpty(),
                 content = plan.string("content").orEmpty(),
                 transferLimitBytes = plan.long("transfer_enable") ?: 0L,
-                deviceLimit = plan.int("device_limit"),
-                speedLimitMbps = plan.int("speed_limit"),
+                deviceLimit = plan.positiveInt("device_limit"),
+                speedLimitMbps = plan.positiveInt("speed_limit"),
                 soldOut = plan.boolean("sold_out") ?: false,
                 purchaseAvailable = plan.boolean("purchase_available") ?: false,
                 renewAvailable = plan.boolean("renew") ?: false,
@@ -173,6 +173,8 @@ object XBoardAccountJsonParser {
         val primitive = this[key]?.takeUnless { it is JsonNull }?.jsonPrimitive ?: return null
         return primitive.intOrNull ?: primitive.contentOrNull?.trim()?.toIntOrNull()
     }
+
+    private fun JsonObject.positiveInt(key: String): Int? = int(key)?.takeIf { it > 0 }
 
     private fun JsonObject.double(key: String): Double? {
         val primitive = this[key]?.takeUnless { it is JsonNull }?.jsonPrimitive ?: return null

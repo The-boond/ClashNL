@@ -12,6 +12,8 @@ import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.repository.RemoteProfileRepository
 import io.nekohasekai.sfa.repository.RemoteProfileUrlPolicy
 import io.nekohasekai.sfa.utils.ProfileConfigStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Date
 
@@ -23,8 +25,8 @@ class AccountProfileSynchronizer(
     private val context: Context,
     private val sessionStore: AccountSessionStore,
 ) : AccountProfileSync {
-    override suspend fun sync(details: AccountDetails): AccountProfileSyncResult? {
-        val remoteUrl = details.subscribeUrl.takeIf { it.isNotBlank() } ?: return null
+    override suspend fun sync(details: AccountDetails): AccountProfileSyncResult? = withContext(Dispatchers.IO) {
+        val remoteUrl = details.subscribeUrl.takeIf { it.isNotBlank() } ?: return@withContext null
         RemoteProfileUrlPolicy.validate(remoteUrl)
 
         val profiles = ProfileManager.list()
@@ -40,7 +42,7 @@ class AccountProfileSynchronizer(
         }
         sessionStore.managedProfileId = result.profileId
         UpdateProfileWork.reconfigureUpdater()
-        return result
+        result
     }
 
     private suspend fun createProfile(
