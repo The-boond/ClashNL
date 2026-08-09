@@ -14,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import io.nekohasekai.sfa.compose.screen.account.AccountScreen
+import io.nekohasekai.sfa.compose.screen.account.PlanPurchaseScreen
 import io.nekohasekai.sfa.compose.screen.configuration.NewProfileScreen
 import io.nekohasekai.sfa.compose.screen.connections.ConnectionDetailsRoute
 import io.nekohasekai.sfa.compose.screen.connections.ConnectionsPage
@@ -576,6 +577,16 @@ fun SFANavHost(
             popExitTransition = slideOutToRight,
         ) {
             AccountScreen(navController = navController)
+        }
+
+        composable(
+            route = "settings/account/plans",
+            enterTransition = slideInFromRight,
+            exitTransition = slideOutToLeft,
+            popEnterTransition = slideInFromLeft,
+            popExitTransition = slideOutToRight,
+        ) {
+            PlanPurchaseScreen(navController = navController)
         }
 
         composable(

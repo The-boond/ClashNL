@@ -104,6 +104,7 @@ fun AccountScreen(
                 isLoading = state.isLoading,
                 errorMessage = state.errorMessage,
                 profileSynced = state.profileSyncResult != null,
+                onManagePlans = { navController.navigate("settings/account/plans") },
                 onRefresh = viewModel::refresh,
                 onLogout = viewModel::logout,
             )
@@ -210,6 +211,7 @@ private fun AccountDetailsContent(
     isLoading: Boolean,
     errorMessage: String?,
     profileSynced: Boolean,
+    onManagePlans: () -> Unit,
     onRefresh: () -> Unit,
     onLogout: () -> Unit,
 ) {
@@ -304,6 +306,14 @@ private fun AccountDetailsContent(
         Text(text = it, color = MaterialTheme.colorScheme.error)
     }
     Spacer(modifier = Modifier.height(20.dp))
+    Button(
+        onClick = onManagePlans,
+        enabled = !isLoading,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Text(stringResource(R.string.account_manage_plans_action))
+    }
+    Spacer(modifier = Modifier.height(8.dp))
     Button(
         onClick = onRefresh,
         enabled = !isLoading,
