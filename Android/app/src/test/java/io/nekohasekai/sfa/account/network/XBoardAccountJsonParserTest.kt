@@ -77,6 +77,16 @@ class XBoardAccountJsonParserTest {
     }
 
     @Test
+    fun `zero device and speed limits map to unlimited`() {
+        val details = XBoardAccountJsonParser.parseSubscription(
+            """{"status":"success","data":{"email":"user@example.com","plan":{"id":1,"name":"不限量","device_limit":0,"speed_limit":"0"}}}""",
+        )
+
+        assertEquals(null, details.plan?.deviceLimit)
+        assertEquals(null, details.plan?.speedLimitMbps)
+    }
+
+    @Test
     fun `base URL policy requires clean HTTPS origin`() {
         assertEquals(
             "https://nextnexus.qzz.io",
