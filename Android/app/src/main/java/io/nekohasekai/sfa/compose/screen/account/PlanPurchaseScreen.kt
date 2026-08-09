@@ -1,5 +1,6 @@
 package io.nekohasekai.sfa.compose.screen.account
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -9,10 +10,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -24,7 +24,6 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -75,11 +74,35 @@ fun PlanPurchaseScreen(
     navController: NavController,
     viewModel: PlanPurchaseViewModel = viewModel(),
 ) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var selectedPlanId by rememberSaveable { mutableStateOf<Long?>(null) }
+    val selectedPlan = state.plans.firstOrNull { it.id == selectedPlanId }
+
+    BackHandler(enabled = selectedPlan != null) { selectedPlanId = null }
+
     OverrideTopBar {
         TopAppBar(
-            title = { Text(stringResource(R.string.account_plans_title)) },
+            title = {
+                Text(
+                    stringResource(
+                        if (selectedPlan == null) {
+                            R.string.account_plans_title
+                        } else {
+                            R.string.account_plan_details
+                        },
+                    ),
+                )
+            },
             navigationIcon = {
-                IconButton(onClick = { navController.navigateUp() }) {
+                IconButton(
+                    onClick = {
+                        if (selectedPlan == null) {
+                            navController.navigateUp()
+                        } else {
+                            selectedPlanId = null
+                        }
+                    },
+                ) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = stringResource(R.string.content_description_back),
@@ -89,7 +112,6 @@ fun PlanPurchaseScreen(
         )
     }
 
-    val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var purchaseCandidate by remember { mutableStateOf<Pair<PlanOffer, PlanPrice>?>(null) }
@@ -97,16 +119,12 @@ fun PlanPurchaseScreen(
     var showPendingCheckoutDialog by remember { mutableStateOf(false) }
     var qrContent by remember { mutableStateOf<String?>(null) }
     var localError by remember { mutableStateOf<String?>(null) }
-    var selectedPlanId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(state.plans) {
-        if (state.plans.none { it.id == selectedPlanId }) {
-            selectedPlanId = state.plans.firstOrNull()?.id
+        if (selectedPlanId != null && state.plans.none { it.id == selectedPlanId }) {
+            selectedPlanId = null
         }
     }
-
-    val selectedPlan = state.plans.firstOrNull { it.id == selectedPlanId }
-        ?: state.plans.firstOrNull()
 
     DisposableEffect(lifecycleOwner, state.pendingOrder?.tradeNo) {
         val observer = LifecycleEventObserver { _, event ->
@@ -224,11 +242,10 @@ fun PlanPurchaseScreen(
             }
         }
 
-        if (state.plans.size > 1) {
+        if (selectedPlan == null && state.plans.isNotEmpty()) {
             item {
                 PlanSelector(
                     plans = state.plans,
-                    selectedPlanId = selectedPlan?.id,
                     onPlanSelected = { selectedPlanId = it },
                 )
             }
@@ -251,25 +268,73 @@ fun PlanPurchaseScreen(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun PlanSelector(
     plans: List<PlanOffer>,
-    selectedPlanId: Long?,
     onPlanSelected: (Long) -> Unit,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Text(
             text = stringResource(R.string.account_choose_plan),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            items(plans, key = { it.id }) { plan ->
-                FilterChip(
-                    selected = plan.id == selectedPlanId,
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+            maxItemsInEachRow = 2,
+        ) {
+            plans.forEach { plan ->
+                val featuredPrice = plan.prices.firstOrNull { it.period == BillingPeriod.MONTH }
+                    ?: plan.prices.firstOrNull()
+                Card(
                     onClick = { onPlanSelected(plan.id) },
-                    label = { Text(plan.name, maxLines = 1) },
-                )
+                    modifier = Modifier.weight(1f),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    ),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 13.dp),
+                        verticalArrangement = Arrangement.spacedBy(5.dp),
+                    ) {
+                        featuredPrice?.let { price ->
+                            Text(
+                                text = stringResource(
+                                    R.string.account_period_price,
+                                    billingPeriodLabel(price.period),
+                                    formatMoney(price.priceCents),
+                                ),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Text(
+                            text = plan.name,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.heightIn(min = 48.dp),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Outlined.Devices, contentDescription = null)
+                            Text(
+                                text = plan.deviceLimit?.let {
+                                    stringResource(R.string.account_device_value, it)
+                                } ?: stringResource(R.string.account_device_unlimited),
+                                modifier = Modifier.padding(start = 6.dp),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
+                    }
+                }
+            }
+            if (plans.size % 2 != 0) {
+                Spacer(modifier = Modifier.weight(1f))
             }
         }
     }
@@ -296,8 +361,6 @@ private fun PlanOfferCard(
                 Text(
                     text = description,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Spacer(modifier = Modifier.height(12.dp))
