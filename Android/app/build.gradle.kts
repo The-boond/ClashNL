@@ -155,6 +155,7 @@ android {
     }
 
     androidResources {
+        localeFilters += listOf("en", "zh-rCN")
         generateLocaleConfig = true
     }
 
