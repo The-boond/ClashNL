@@ -17,7 +17,6 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.Devices
-import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -307,13 +306,6 @@ private fun PlanOfferCard(
                 Text(
                     text = plan.deviceLimit?.let { stringResource(R.string.account_device_value, it) }
                         ?: stringResource(R.string.account_device_unlimited),
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-                Spacer(modifier = Modifier.weight(1f))
-                Icon(Icons.Outlined.Speed, contentDescription = null)
-                Text(
-                    text = plan.speedLimitMbps?.let { stringResource(R.string.account_speed_value, it) }
-                        ?: stringResource(R.string.account_unlimited),
                     modifier = Modifier.padding(start = 8.dp),
                 )
             }
