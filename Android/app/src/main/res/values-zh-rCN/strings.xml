@@ -88,6 +88,7 @@
     <string name="account_manage_plans_action">购买、续费或更换套餐</string>
     <string name="account_plans_title">套餐与支付</string>
     <string name="account_plan">订阅套餐</string>
+    <string name="account_choose_plan">选择套餐</string>
     <string name="account_plan_sold_out">已售罄</string>
     <string name="account_plan_unavailable">当前套餐暂不可购买</string>
     <string name="account_device_value">%1$d 台设备</string>

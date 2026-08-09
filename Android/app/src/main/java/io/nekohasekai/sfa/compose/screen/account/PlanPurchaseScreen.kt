@@ -2,6 +2,8 @@ package io.nekohasekai.sfa.compose.screen.account
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
@@ -22,6 +25,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -36,13 +40,16 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.text.HtmlCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -63,7 +70,7 @@ import java.net.URI
 import java.text.NumberFormat
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalLayoutApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun PlanPurchaseScreen(
     navController: NavController,
@@ -91,6 +98,16 @@ fun PlanPurchaseScreen(
     var showPendingCheckoutDialog by remember { mutableStateOf(false) }
     var qrContent by remember { mutableStateOf<String?>(null) }
     var localError by remember { mutableStateOf<String?>(null) }
+    var selectedPlanId by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    LaunchedEffect(state.plans) {
+        if (state.plans.none { it.id == selectedPlanId }) {
+            selectedPlanId = state.plans.firstOrNull()?.id
+        }
+    }
+
+    val selectedPlan = state.plans.firstOrNull { it.id == selectedPlanId }
+        ?: state.plans.firstOrNull()
 
     DisposableEffect(lifecycleOwner, state.pendingOrder?.tradeNo) {
         val observer = LifecycleEventObserver { _, event ->
@@ -208,15 +225,27 @@ fun PlanPurchaseScreen(
             }
         }
 
-        items(state.plans, key = { it.id }) { plan ->
-            PlanOfferCard(
-                plan = plan,
-                enabled = state.pendingOrder == null && !state.isLoading && state.paymentMethods.isNotEmpty(),
-                onPriceSelected = { price ->
-                    selectedMethodId = state.paymentMethods.firstOrNull()?.id
-                    purchaseCandidate = plan to price
-                },
-            )
+        if (state.plans.size > 1) {
+            item {
+                PlanSelector(
+                    plans = state.plans,
+                    selectedPlanId = selectedPlan?.id,
+                    onPlanSelected = { selectedPlanId = it },
+                )
+            }
+        }
+
+        selectedPlan?.let { plan ->
+            item(key = plan.id) {
+                PlanOfferCard(
+                    plan = plan,
+                    enabled = state.pendingOrder == null && !state.isLoading && state.paymentMethods.isNotEmpty(),
+                    onPriceSelected = { price ->
+                        selectedMethodId = state.paymentMethods.firstOrNull()?.id
+                        purchaseCandidate = plan to price
+                    },
+                )
+            }
         }
 
         item { Spacer(modifier = Modifier.height(24.dp)) }
@@ -224,20 +253,53 @@ fun PlanPurchaseScreen(
 }
 
 @Composable
+private fun PlanSelector(
+    plans: List<PlanOffer>,
+    selectedPlanId: Long?,
+    onPlanSelected: (Long) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = stringResource(R.string.account_choose_plan),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            items(plans, key = { it.id }) { plan ->
+                FilterChip(
+                    selected = plan.id == selectedPlanId,
+                    onClick = { onPlanSelected(plan.id) },
+                    label = { Text(plan.name, maxLines = 1) },
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
 private fun PlanOfferCard(
     plan: PlanOffer,
     enabled: Boolean,
     onPriceSelected: (PlanPrice) -> Unit,
 ) {
+    val description = remember(plan.content) {
+        HtmlCompat.fromHtml(plan.content, HtmlCompat.FROM_HTML_MODE_COMPACT).toString().trim()
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
     ) {
         Column(modifier = Modifier.padding(18.dp)) {
             Text(plan.name, style = MaterialTheme.typography.titleLarge)
-            if (plan.content.isNotBlank()) {
+            if (description.isNotBlank()) {
                 Spacer(modifier = Modifier.height(6.dp))
-                Text(plan.content, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    text = description,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
             Spacer(modifier = Modifier.height(12.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -266,21 +328,25 @@ private fun PlanOfferCard(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             } else {
-                plan.prices.forEach { price ->
-                    AssistChip(
-                        onClick = { onPriceSelected(price) },
-                        enabled = enabled,
-                        label = {
-                            Text(
-                                stringResource(
-                                    R.string.account_period_price,
-                                    billingPeriodLabel(price.period),
-                                    formatMoney(price.priceCents),
-                                ),
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    plan.prices.forEach { price ->
+                        AssistChip(
+                            onClick = { onPriceSelected(price) },
+                            enabled = enabled,
+                            label = {
+                                Text(
+                                    stringResource(
+                                        R.string.account_period_price,
+                                        billingPeriodLabel(price.period),
+                                        formatMoney(price.priceCents),
+                                    ),
+                                )
+                            },
+                        )
+                    }
                 }
             }
         }
