@@ -1,7 +1,12 @@
 package io.nekohasekai.sfa.account.network
 
 import io.nekohasekai.sfa.account.model.AccountDetails
+import io.nekohasekai.sfa.account.model.AccountOrder
 import io.nekohasekai.sfa.account.model.AccountSession
+import io.nekohasekai.sfa.account.model.BillingPeriod
+import io.nekohasekai.sfa.account.model.CheckoutResult
+import io.nekohasekai.sfa.account.model.PaymentMethod
+import io.nekohasekai.sfa.account.model.PlanOffer
 import io.nekohasekai.sfa.utils.HTTPClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -15,6 +20,20 @@ interface AccountApi {
     suspend fun login(email: String, password: String): AccountSession
 
     suspend fun getSubscription(authorization: String): AccountDetails
+
+    suspend fun getPlans(authorization: String): List<PlanOffer>
+
+    suspend fun getPaymentMethods(authorization: String): List<PaymentMethod>
+
+    suspend fun createOrder(authorization: String, planId: Long, period: BillingPeriod): String
+
+    suspend fun getPendingOrders(authorization: String): List<AccountOrder>
+
+    suspend fun checkout(authorization: String, tradeNo: String, methodId: Long): CheckoutResult
+
+    suspend fun checkOrder(authorization: String, tradeNo: String): Int
+
+    suspend fun cancelOrder(authorization: String, tradeNo: String): Boolean
 }
 
 class XBoardAccountApi(
@@ -42,6 +61,94 @@ class XBoardAccountApi(
             authorization = authorization,
         )
         XBoardAccountJsonParser.parseSubscription(response)
+    }
+
+    override suspend fun getPlans(authorization: String): List<PlanOffer> = withContext(Dispatchers.IO) {
+        XBoardAccountJsonParser.parsePlans(
+            request(path = "/api/v1/user/plan/fetch", method = "GET", authorization = authorization),
+        )
+    }
+
+    override suspend fun getPaymentMethods(authorization: String): List<PaymentMethod> = withContext(Dispatchers.IO) {
+        XBoardAccountJsonParser.parsePaymentMethods(
+            request(
+                path = "/api/v1/user/order/getPaymentMethod",
+                method = "GET",
+                authorization = authorization,
+            ),
+        )
+    }
+
+    override suspend fun createOrder(
+        authorization: String,
+        planId: Long,
+        period: BillingPeriod,
+    ): String = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            put("plan_id", planId)
+            put("period", period.apiValue)
+        }.toString()
+        XBoardAccountJsonParser.parseTradeNo(
+            request(
+                path = "/api/v1/user/order/save",
+                method = "POST",
+                body = body,
+                authorization = authorization,
+            ),
+        )
+    }
+
+    override suspend fun getPendingOrders(authorization: String): List<AccountOrder> = withContext(Dispatchers.IO) {
+        XBoardAccountJsonParser.parseOrders(
+            request(
+                path = "/api/v1/user/order/fetch?status=0",
+                method = "GET",
+                authorization = authorization,
+            ),
+        )
+    }
+
+    override suspend fun checkout(
+        authorization: String,
+        tradeNo: String,
+        methodId: Long,
+    ): CheckoutResult = withContext(Dispatchers.IO) {
+        val body = buildJsonObject {
+            put("trade_no", tradeNo)
+            put("method", methodId)
+        }.toString()
+        XBoardAccountJsonParser.parseCheckout(
+            request(
+                path = "/api/v1/user/order/checkout",
+                method = "POST",
+                body = body,
+                authorization = authorization,
+            ),
+        )
+    }
+
+    override suspend fun checkOrder(authorization: String, tradeNo: String): Int = withContext(Dispatchers.IO) {
+        XBoardAccountJsonParser.parseOrderStatus(
+            request(
+                path = "/api/v1/user/order/check?trade_no=${encodeQueryValue(tradeNo)}",
+                method = "GET",
+                authorization = authorization,
+            ),
+        )
+    }
+
+    override suspend fun cancelOrder(authorization: String, tradeNo: String): Boolean = withContext(Dispatchers.IO) {
+        val body = buildJsonObject { put("trade_no", tradeNo) }.toString()
+        val cancelled = XBoardAccountJsonParser.parseSuccess(
+            request(
+                path = "/api/v1/user/order/cancel",
+                method = "POST",
+                body = body,
+                authorization = authorization,
+            ),
+        )
+        if (!cancelled) throw AccountApiException("取消订单失败")
+        true
     }
 
     private fun request(
@@ -72,10 +179,9 @@ class XBoardAccountApi(
                 throw AccountApiException("服务器响应为空（HTTP $statusCode）")
             }
             if (statusCode !in 200..299) {
-                runCatching { XBoardAccountJsonParser.parseSubscription(response) }
-                    .exceptionOrNull()
-                    ?.let { throw AccountApiException(it.message ?: "请求失败（HTTP $statusCode）", it) }
-                throw AccountApiException("请求失败（HTTP $statusCode）")
+                val message = XBoardAccountJsonParser.parseErrorMessage(response)
+                    ?: "请求失败（HTTP $statusCode）"
+                throw AccountApiException(message)
             }
             return response
         } catch (exception: AccountApiException) {
@@ -90,6 +196,8 @@ class XBoardAccountApi(
     companion object {
         private const val CONNECT_TIMEOUT_MILLIS = 15_000
         private const val READ_TIMEOUT_MILLIS = 20_000
+
+        private fun encodeQueryValue(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8.name())
 
         fun validateBaseUrl(value: String): String {
             val normalized = value.trim().trimEnd('/')

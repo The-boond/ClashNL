@@ -22,6 +22,8 @@ interface AccountSessionStore {
     fun clearSession()
 
     var managedProfileId: Long
+
+    var pendingTradeNo: String?
 }
 
 class AndroidAccountSessionStore(
@@ -56,6 +58,7 @@ class AndroidAccountSessionStore(
         preferences.edit()
             .remove(KEY_EMAIL)
             .remove(KEY_AUTHORIZATION)
+            .remove(KEY_PENDING_TRADE_NO)
             .apply()
     }
 
@@ -63,6 +66,14 @@ class AndroidAccountSessionStore(
         get() = preferences.getLong(KEY_MANAGED_PROFILE_ID, -1L)
         set(value) {
             preferences.edit().putLong(KEY_MANAGED_PROFILE_ID, value).apply()
+        }
+
+    override var pendingTradeNo: String?
+        get() = preferences.getString(KEY_PENDING_TRADE_NO, null)?.takeIf { it.isNotBlank() }
+        set(value) {
+            preferences.edit().apply {
+                if (value.isNullOrBlank()) remove(KEY_PENDING_TRADE_NO) else putString(KEY_PENDING_TRADE_NO, value)
+            }.apply()
         }
 
     private fun encrypt(value: String): String {
@@ -121,6 +132,7 @@ class AndroidAccountSessionStore(
         private const val KEY_EMAIL = "email"
         private const val KEY_AUTHORIZATION = "authorization_encrypted"
         private const val KEY_MANAGED_PROFILE_ID = "managed_profile_id"
+        private const val KEY_PENDING_TRADE_NO = "pending_trade_no"
         private const val KEY_ALIAS = "clashnl_account_session_rsa_v1"
         private const val ANDROID_KEY_STORE = "AndroidKeyStore"
         private const val TRANSFORMATION = "RSA/ECB/PKCS1Padding"
