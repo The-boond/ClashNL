@@ -43,10 +43,15 @@ cp "${ROOT_DIR}/Core/overlay/experimental/libbox/clash_converter.go" \
   "${CORE_DIR}/experimental/libbox/clash_converter.go"
 git -C "${CORE_DIR}" apply --check "${ROOT_DIR}/Core/overlay/experimental/libbox/http_response_headers.patch"
 git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/experimental/libbox/http_response_headers.patch"
+git -C "${CORE_DIR}" apply --check "${ROOT_DIR}/Core/overlay/daemon/started_service_urltest_result.patch"
+git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/daemon/started_service_urltest_result.patch"
+git -C "${CORE_DIR}" apply --check "${ROOT_DIR}/Core/overlay/experimental/libbox/command_server_urltest_result.patch"
+git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/experimental/libbox/command_server_urltest_result.patch"
 
 (
   cd "${CORE_DIR}"
   go test ./experimental/libbox/internal/clashconv
+  go test ./daemon ./experimental/libbox
   go run \
     -tags "with_gvisor,with_quic,with_wireguard,with_utls,with_clash_api" \
     ./cmd/sing-box check -c "${GENERATED_CONFIG}"
