@@ -45,9 +45,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -73,15 +71,11 @@ import io.nekohasekai.sfa.compose.model.GroupItem
 import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsViewModel
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.compose.util.rememberSheetDismissFromContentOnlyIfGestureStartedAtTopModifier
-import io.nekohasekai.sfa.config.ProfileNodeSelection
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.latency.LatencyResultStatus
+import io.nekohasekai.sfa.latency.NodeLatencyResult
 import io.nekohasekai.sfa.utils.CommandClient
-import io.nekohasekai.sfa.utils.ProfileConfigStore
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -198,47 +192,15 @@ fun SubscriptionNodesPanel(
         },
     )
     val uiState by actualViewModel.uiState.collectAsState()
-    val scope = rememberCoroutineScope()
-    var offlineGroups by remember(profile?.id, profile?.typed?.path) {
-        mutableStateOf<List<Group>>(emptyList())
-    }
-    var offlineLoading by remember(profile?.id, profile?.typed?.path) {
-        mutableStateOf(false)
-    }
-    var offlineSaving by remember(profile?.id, profile?.typed?.path) {
-        mutableStateOf(false)
-    }
 
     LaunchedEffect(serviceStatus) {
         actualViewModel.updateServiceStatus(serviceStatus)
     }
 
-    LaunchedEffect(serviceStatus, profile?.id, profile?.typed?.path) {
-        if (serviceStatus == Status.Started || profile == null) return@LaunchedEffect
-        offlineLoading = true
-        offlineGroups =
-            runCatching {
-                withContext(Dispatchers.IO) {
-                    readOfflineGroups(File(profile.typed.path))
-                }
-            }.getOrDefault(emptyList())
-        offlineLoading = false
-    }
-
-    val availableGroups =
-        if (serviceStatus == Status.Started) {
-            uiState.groups
-        } else {
-            offlineGroups
-        }
+    val availableGroups = uiState.groups
     val primaryGroup = availableGroups.firstOrNull { it.selectable } ?: availableGroups.firstOrNull()
     val isTesting = primaryGroup?.let { uiState.testingGroups.contains(it.tag) } == true
-    val isLoading =
-        if (serviceStatus == Status.Started) {
-            uiState.isLoading
-        } else {
-            offlineLoading
-        }
+    val isLoading = uiState.isLoading
 
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -273,10 +235,9 @@ fun SubscriptionNodesPanel(
                 )
             }
 
-            if (serviceStatus == Status.Started && primaryGroup?.selectable == true) {
+            if (primaryGroup?.selectable == true) {
                 TextButton(
                     onClick = { actualViewModel.urlTest(primaryGroup.tag) },
-                    enabled = !isTesting,
                 ) {
                     if (isTesting) {
                         CircularProgressIndicator(
@@ -288,9 +249,9 @@ fun SubscriptionNodesPanel(
                     Text(
                         stringResource(
                             if (isTesting) {
-                                R.string.url_test_running
+                                R.string.latency_test_cancel
                             } else {
-                                R.string.url_test
+                                R.string.latency_test_all
                             },
                         ),
                     )
@@ -327,56 +288,11 @@ fun SubscriptionNodesPanel(
                 ProxyItemsList(
                     items = primaryGroup.items,
                     selectedTag = primaryGroup.selected,
-                    isSelectable = primaryGroup.selectable && !offlineSaving,
-                    onItemSelected = { itemTag ->
-                        if (serviceStatus == Status.Started) {
-                            actualViewModel.selectGroupItem(primaryGroup.tag, itemTag)
-                        } else if (profile != null) {
-                            offlineSaving = true
-                            scope.launch {
-                                offlineGroups =
-                                    runCatching {
-                                        withContext(Dispatchers.IO) {
-                                            val profileFile = File(profile.typed.path)
-                                            val updated =
-                                                ProfileNodeSelection.select(
-                                                    content = profileFile.readText(),
-                                                    groupTag = primaryGroup.tag,
-                                                    itemTag = itemTag,
-                                                )
-                                            ProfileConfigStore.writeIfChanged(profileFile, updated)
-                                            readOfflineGroups(profileFile)
-                                        }
-                                    }.getOrElse { offlineGroups }
-                                offlineSaving = false
-                            }
-                        }
-                    },
+                    isSelectable = primaryGroup.selectable,
+                    onItemSelected = { itemTag -> actualViewModel.selectGroupItem(primaryGroup.tag, itemTag) },
                 )
             }
         }
-    }
-}
-
-private fun readOfflineGroups(profileFile: File): List<Group> {
-    if (!profileFile.isFile) return emptyList()
-    return ProfileNodeSelection.read(profileFile.readText()).map { selector ->
-        Group(
-            tag = selector.tag,
-            type = "selector",
-            selectable = true,
-            selected = selector.selected,
-            isExpand = true,
-            items =
-            selector.items.map { item ->
-                GroupItem(
-                    tag = item.tag,
-                    type = item.type,
-                    urlTestTime = 0,
-                    urlTestDelay = 0,
-                )
-            },
-        )
     }
 }
 
@@ -559,7 +475,6 @@ private fun ProxyGroupItem(
                 if (group.selectable) {
                     TextButton(
                         onClick = onUrlTest,
-                        enabled = !isTesting,
                         modifier = Modifier.padding(end = 8.dp),
                     ) {
                         if (isTesting) {
@@ -573,9 +488,9 @@ private fun ProxyGroupItem(
                             text =
                             stringResource(
                                 if (isTesting) {
-                                    R.string.url_test_running
+                                    R.string.latency_test_cancel
                                 } else {
-                                    R.string.url_test
+                                    R.string.latency_test_all
                                 },
                             ),
                         )
@@ -717,12 +632,12 @@ private fun ProxyChip(item: GroupItem, isSelected: Boolean, isSelectable: Boolea
             )
 
             AnimatedVisibility(
-                visible = item.urlTestTime > 0,
+                visible = true,
                 enter = fadeIn(),
                 exit = fadeOut(),
             ) {
                 ProxyLatencyBadge(
-                    delay = item.urlTestDelay,
+                    latency = item.latency,
                     isSelected = isSelected,
                     modifier = Modifier.padding(start = 12.dp),
                 )
@@ -753,9 +668,14 @@ private fun ProxyChip(item: GroupItem, isSelected: Boolean, isSelectable: Boolea
 }
 
 @Composable
-private fun ProxyLatencyBadge(delay: Int, isSelected: Boolean, modifier: Modifier = Modifier) {
+private fun ProxyLatencyBadge(
+    latency: NodeLatencyResult?,
+    isSelected: Boolean,
+    modifier: Modifier = Modifier,
+) {
     // Direct color calculation without animation for better performance
     val colorScheme = MaterialTheme.colorScheme
+    val delay = latency?.medianMs?.coerceIn(0, Int.MAX_VALUE.toLong())?.toInt() ?: Int.MAX_VALUE
     val latencyColor =
         remember(delay, isSelected) {
             when {
@@ -797,8 +717,22 @@ private fun ProxyLatencyBadge(delay: Int, isSelected: Boolean, modifier: Modifie
             }
         }
 
+    val label = when (latency?.status) {
+        LatencyResultStatus.SUCCESS, LatencyResultStatus.CACHED ->
+            stringResource(R.string.latency_label) + ": ${latency.medianMs}ms"
+        LatencyResultStatus.TESTING -> stringResource(R.string.latency_status_testing)
+        LatencyResultStatus.TIMEOUT -> stringResource(R.string.latency_status_timeout)
+        LatencyResultStatus.FAILED -> stringResource(R.string.latency_status_failed)
+        LatencyResultStatus.CANCELLED -> stringResource(R.string.latency_status_cancelled)
+        LatencyResultStatus.EXPIRED -> {
+            val previous = latency.medianMs?.let { " ${it}ms" }.orEmpty()
+            stringResource(R.string.latency_status_expired) + previous
+        }
+        else -> stringResource(R.string.latency_status_untested)
+    }
+
     Text(
-        text = "${delay}ms",
+        text = label,
         style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.SemiBold,
         color = latencyColor,
