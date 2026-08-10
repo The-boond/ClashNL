@@ -1,0 +1,5 @@
+First stable ClashNL Android release.
+
+- Added account sync, plan browsing, and checkout flow.
+- Added network-aware node latency testing with offline results.
+- Refined Chinese and English plan details and billing choices.
