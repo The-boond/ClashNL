@@ -956,6 +956,8 @@ private fun serviceStatusLabel(status: Status): String = when (status) {
 }
 
 private fun findLocalIp(context: Context): String? {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null
+
     val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
     val network = connectivityManager.activeNetwork ?: return null
     val addresses =
