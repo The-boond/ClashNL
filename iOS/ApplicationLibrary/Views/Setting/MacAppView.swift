@@ -7,7 +7,7 @@ import SwiftUI
 #endif
 
 public struct AppView: View {
-    private static let fallbackLanguageCodes = ["en", "zh-Hans", "zh-Hant", "ru", "fa"]
+    private static let fallbackLanguageCodes = ["en", "zh-Hans"]
 
     private struct LanguageOption: Hashable {
         let code: String?
