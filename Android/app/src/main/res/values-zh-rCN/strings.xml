@@ -182,6 +182,9 @@
     <string name="dashboard_service_transitioning">正在更新服务…</string>
     <string name="dashboard_start_service">启动 VPN</string>
     <string name="dashboard_stop_service">关闭 VPN</string>
+    <string name="shortcut_toggle_service">切换</string>
+    <string name="shortcut_start_service">启动</string>
+    <string name="shortcut_pause_service">暂停</string>
     <string name="dashboard_service_mode_value">模式：%1$s</string>
     <string name="dashboard_connections_short">连接数</string>
     <string name="dashboard_last_updated">更新时间</string>

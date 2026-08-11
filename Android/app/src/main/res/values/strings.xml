@@ -182,6 +182,9 @@
     <string name="dashboard_service_transitioning">Updating service…</string>
     <string name="dashboard_start_service">Start VPN</string>
     <string name="dashboard_stop_service">Stop VPN</string>
+    <string name="shortcut_toggle_service">Toggle</string>
+    <string name="shortcut_start_service">Start</string>
+    <string name="shortcut_pause_service">Pause</string>
     <string name="dashboard_service_mode_value">Mode: %1$s</string>
     <string name="dashboard_connections_short">Connections</string>
     <string name="dashboard_last_updated">Last updated</string>

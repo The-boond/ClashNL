@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="toggle_service"
+        android:shortcutLongLabel="@string/shortcut_toggle_service"
+        android:shortcutShortLabel="@string/shortcut_toggle_service">
+        <intent
+            android:action="com.clashnl.android.SHORTCUT_TOGGLE_SERVICE"
+            android:targetClass="io.nekohasekai.sfa.compose.MainActivity"
+            android:targetPackage="com.clashnl.android" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="start_service"
+        android:shortcutLongLabel="@string/shortcut_start_service"
+        android:shortcutShortLabel="@string/shortcut_start_service">
+        <intent
+            android:action="com.clashnl.android.SHORTCUT_START_SERVICE"
+            android:targetClass="io.nekohasekai.sfa.compose.MainActivity"
+            android:targetPackage="com.clashnl.android" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutId="pause_service"
+        android:shortcutLongLabel="@string/shortcut_pause_service"
+        android:shortcutShortLabel="@string/shortcut_pause_service">
+        <intent
+            android:action="com.clashnl.android.SHORTCUT_PAUSE_SERVICE"
+            android:targetClass="io.nekohasekai.sfa.compose.MainActivity"
+            android:targetPackage="com.clashnl.android" />
+    </shortcut>
+</shortcuts>

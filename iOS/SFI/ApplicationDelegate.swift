@@ -8,11 +8,32 @@ import UIKit
 import UserNotifications
 
 class ApplicationDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    private enum HomeScreenShortcutAction: String, CaseIterable {
+        case toggle = "clashnl.shortcut.toggle"
+        case start = "clashnl.shortcut.start"
+        case pause = "clashnl.shortcut.pause"
+
+        var title: String {
+            switch self {
+            case .toggle:
+                return String(localized: "Toggle")
+            case .start:
+                return String(localized: "Start")
+            case .pause:
+                return String(localized: "Pause")
+            }
+        }
+    }
+
     private var profileServer: ProfileServer?
     private var reportTransferServer: ReportTransferServer?
     private var activated = false
+    private var pendingHomeScreenShortcut: HomeScreenShortcutAction?
 
-    func application(_: UIApplication, didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+    func application(_: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        if let shortcutItem = launchOptions?[.shortcutItem] as? UIApplicationShortcutItem {
+            pendingHomeScreenShortcut = HomeScreenShortcutAction(rawValue: shortcutItem.type)
+        }
         LibboxPrepareCrashSignalHandlers()
         NativeCrashReporter.installForCurrentProcess()
         LibboxReinstallCrashSignalHandlers()
@@ -32,6 +53,7 @@ class ApplicationDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCe
         } catch {
             NSLog("failed to set locale: \(error)")
         }
+        registerHomeScreenShortcuts()
         let notificationCenter = UNUserNotificationCenter.current()
         notificationCenter.setNotificationCategories([
             UNNotificationCategory(
@@ -68,6 +90,19 @@ class ApplicationDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCe
         return true
     }
 
+    func application(_: UIApplication, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
+        guard let action = HomeScreenShortcutAction(rawValue: shortcutItem.type) else {
+            completionHandler(false)
+            return
+        }
+        guard UserDefaults.standard.bool(forKey: "privacyDisclosureAccepted") else {
+            pendingHomeScreenShortcut = action
+            completionHandler(true)
+            return
+        }
+        performHomeScreenShortcut(action, completionHandler: completionHandler)
+    }
+
     func userNotificationCenter(_: UNUserNotificationCenter, willPresent _: UNNotification) async -> UNNotificationPresentationOptions {
         .banner
     }
@@ -99,6 +134,57 @@ class ApplicationDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCe
                 await requestNetworkPermission()
             }
             await setupBackground()
+        }
+        if let pendingHomeScreenShortcut {
+            self.pendingHomeScreenShortcut = nil
+            performHomeScreenShortcut(pendingHomeScreenShortcut) { success in
+                if !success {
+                    NSLog("home screen shortcut action did not complete")
+                }
+            }
+        }
+    }
+
+    private func registerHomeScreenShortcuts() {
+        UIApplication.shared.shortcutItems = HomeScreenShortcutAction.allCases.map { action in
+            UIApplicationShortcutItem(
+                type: action.rawValue,
+                localizedTitle: action.title,
+                localizedSubtitle: nil,
+                icon: nil,
+                userInfo: nil
+            )
+        }
+    }
+
+    private func performHomeScreenShortcut(_ action: HomeScreenShortcutAction, completionHandler: @escaping (Bool) -> Void) {
+        Task { @MainActor in
+            do {
+                guard let profile = try await ExtensionProfile.load() else {
+                    completionHandler(false)
+                    return
+                }
+                switch action {
+                case .toggle:
+                    if profile.status.isConnected {
+                        try await profile.stop()
+                    } else {
+                        try await profile.start()
+                    }
+                case .start:
+                    if !profile.status.isConnected {
+                        try await profile.start()
+                    }
+                case .pause:
+                    if profile.status.isConnected {
+                        try await profile.stop()
+                    }
+                }
+                completionHandler(true)
+            } catch {
+                NSLog("home screen shortcut action \(action.rawValue) error: \(error.localizedDescription)")
+                completionHandler(false)
+            }
         }
     }
 

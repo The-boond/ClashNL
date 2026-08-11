@@ -1,6 +1,7 @@
-ClashNL Android v1.0.1 hotfix.
+ClashNL Android v1.0.2.
 
 - Added account sync, plan browsing, and checkout flow.
 - Added network-aware node latency testing with offline results.
 - Refined Chinese and English plan details and billing choices.
 - Fixed startup failures when switching service modes while the previous local service still held its SOCKS port.
+- Added launcher shortcuts for Toggle, Start, and Pause service actions.

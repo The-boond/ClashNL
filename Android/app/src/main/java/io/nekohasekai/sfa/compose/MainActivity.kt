@@ -140,6 +140,12 @@ import kotlinx.coroutines.withContext
 class MainActivity :
     AppCompatActivity(),
     ServiceConnection.Callback {
+    private enum class HomeShortcutAction {
+        Toggle,
+        Start,
+        Pause,
+    }
+
     private val connection = ServiceConnection(this, this)
     private lateinit var dashboardViewModel: DashboardViewModel
     private var currentServiceStatus by mutableStateOf(Status.Stopped)
@@ -199,6 +205,7 @@ class MainActivity :
             }
         }
     private val pendingNavigationRoute = mutableStateOf<String?>(null)
+    private var pendingHomeShortcutAction: HomeShortcutAction? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -234,16 +241,34 @@ class MainActivity :
                 SFAApp()
             }
         }
+        processPendingHomeShortcut()
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleIntent(intent)
+        processPendingHomeShortcut()
     }
 
     private fun handleIntent(intent: Intent?) {
         if (intent == null) {
             return
+        }
+        when (intent.action) {
+            Action.SHORTCUT_TOGGLE_SERVICE -> {
+                pendingHomeShortcutAction = HomeShortcutAction.Toggle
+                return
+            }
+
+            Action.SHORTCUT_START_SERVICE -> {
+                pendingHomeShortcutAction = HomeShortcutAction.Start
+                return
+            }
+
+            Action.SHORTCUT_PAUSE_SERVICE -> {
+                pendingHomeShortcutAction = HomeShortcutAction.Pause
+                return
+            }
         }
         if (intent.categories?.contains("de.robv.android.xposed.category.MODULE_SETTINGS") == true) {
             pendingNavigationRoute.value = "settings/privilege"
@@ -310,6 +335,50 @@ class MainActivity :
                         }
                     }
                 }
+        }
+    }
+
+    private fun processPendingHomeShortcut() {
+        val action = pendingHomeShortcutAction ?: return
+        pendingHomeShortcutAction = null
+        lifecycleScope.launch {
+            val status = awaitHomeShortcutServiceStatus()
+            val serviceActive = status == Status.Starting || status == Status.Started
+            when (action) {
+                HomeShortcutAction.Toggle -> {
+                    if (serviceActive) {
+                        BoxService.stop()
+                    } else if (status != Status.Stopping) {
+                        startService()
+                    }
+                }
+
+                HomeShortcutAction.Start -> {
+                    if (!serviceActive && status != Status.Stopping) {
+                        startService()
+                    }
+                }
+
+                HomeShortcutAction.Pause -> {
+                    BoxService.stop()
+                }
+            }
+        }
+    }
+
+    private suspend fun awaitHomeShortcutServiceStatus(): Status {
+        repeat(10) {
+            val status =
+                withContext(Dispatchers.IO) {
+                    runCatching { connection.status }.getOrDefault(Status.Stopped)
+                }
+            if (status != Status.Stopped) {
+                return status
+            }
+            delay(100L)
+        }
+        return withContext(Dispatchers.IO) {
+            runCatching { connection.status }.getOrDefault(Status.Stopped)
         }
     }
 
