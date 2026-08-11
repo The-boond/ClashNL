@@ -6,6 +6,7 @@ import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.sfa.bg.BoxService
 import io.nekohasekai.sfa.compose.base.BaseViewModel
+import io.nekohasekai.sfa.compose.base.GlobalEventBus
 import io.nekohasekai.sfa.compose.base.UiEvent
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
@@ -294,14 +295,14 @@ class DashboardViewModel :
                     if (restart) {
                         // Need full restart
                         BoxService.stop()
-                        sendGlobalEvent(UiEvent.RequestReconnectService)
-                        for (i in 0 until 30) {
+                        for (i in 0 until 50) {
                             if (_serviceStatus.value == Status.Stopped) {
                                 break
                             }
                             delay(100L)
                         }
-                        sendGlobalEvent(UiEvent.RequestStartService)
+                        GlobalEventBus.emit(UiEvent.RequestReconnectService)
+                        GlobalEventBus.emit(UiEvent.RequestStartService)
                     } else {
                         // Just reload
                         Libbox.newStandaloneCommandClient().serviceReload()

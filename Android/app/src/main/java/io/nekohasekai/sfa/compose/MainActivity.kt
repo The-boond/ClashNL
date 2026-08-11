@@ -332,6 +332,7 @@ class MainActivity :
     private fun startService0() {
         lifecycleScope.launch(Dispatchers.IO) {
             if (Settings.rebuildServiceMode()) {
+                stopLocalServiceAndWait()
                 connection.reconnect()
             }
             if (Settings.serviceMode == ServiceMode.VPN) {
@@ -344,6 +345,16 @@ class MainActivity :
                 ContextCompat.startForegroundService(this@MainActivity, intent)
             }
             Settings.startedByUser = true
+        }
+    }
+
+    private suspend fun stopLocalServiceAndWait() {
+        BoxService.stop()
+        withContext(Dispatchers.Main) {
+            repeat(50) {
+                if (currentServiceStatus == Status.Stopped) return@withContext
+                delay(100L)
+            }
         }
     }
 

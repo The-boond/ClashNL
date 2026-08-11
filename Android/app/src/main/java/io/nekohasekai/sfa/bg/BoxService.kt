@@ -79,6 +79,9 @@ class BoxService(private val service: Service, private val platformInterface: Pl
     private val notification = ServiceNotification(status, service)
     private lateinit var commandServer: CommandServer
 
+    @Volatile
+    private var stopRequested = false
+
     private var receiverRegistered = false
     private val receiver =
         object : BroadcastReceiver() {
@@ -100,6 +103,10 @@ class BoxService(private val service: Service, private val platformInterface: Pl
     private fun startCommandServer() {
         val commandServer = CommandServer(this, platformInterface)
         commandServer.start()
+        if (stopRequested) {
+            commandServer.close()
+            return
+        }
         this.commandServer = commandServer
     }
 
@@ -107,6 +114,8 @@ class BoxService(private val service: Service, private val platformInterface: Pl
 
     private suspend fun startService() {
         try {
+            if (stopRequested) return
+
             withContext(Dispatchers.Main) {
                 notification.show(lastProfileName, R.string.status_starting)
             }
@@ -138,6 +147,7 @@ class BoxService(private val service: Service, private val platformInterface: Pl
             DefaultNetworkMonitor.start()
 
             try {
+                if (stopRequested) return
                 val content = normalizeStoredProfile(profileFile, storedContent)
                 commandServer.startOrReloadService(
                     content,
@@ -156,6 +166,7 @@ class BoxService(private val service: Service, private val platformInterface: Pl
                     },
                 )
                 applyConfiguredNodeSelections(content)
+                if (stopRequested) return
             } catch (e: Exception) {
                 stopAndAlert(Alert.CreateService, e.message)
                 return
@@ -311,7 +322,8 @@ class BoxService(private val service: Service, private val platformInterface: Pl
 
     @OptIn(DelicateCoroutinesApi::class)
     private fun stopService() {
-        if (status.value != Status.Started) return
+        if (status.value == Status.Stopped || status.value == Status.Stopping) return
+        stopRequested = true
         status.value = Status.Stopping
         if (receiverRegistered) {
             service.unregisterReceiver(receiver)
@@ -325,10 +337,10 @@ class BoxService(private val service: Service, private val platformInterface: Pl
                 fileDescriptor = null
             }
             DefaultNetworkMonitor.stop()
-            closeService()
-            commandServer.apply {
-                close()
-//                Seq.destroyRef(refnum)
+            if (::commandServer.isInitialized) {
+                closeService()
+                commandServer.close()
+//              Seq.destroyRef(refnum)
             }
             Settings.startedByUser = false
             withContext(Dispatchers.Main) {
@@ -347,6 +359,7 @@ class BoxService(private val service: Service, private val platformInterface: Pl
     }
 
     private suspend fun stopAndAlert(type: Alert, message: String? = null) {
+        stopRequested = true
         Settings.startedByUser = false
         val pfd = fileDescriptor
         if (pfd != null) {
@@ -376,6 +389,7 @@ class BoxService(private val service: Service, private val platformInterface: Pl
     @Suppress("SameReturnValue")
     internal fun onStartCommand(): Int {
         if (status.value != Status.Stopped) return Service.START_NOT_STICKY
+        stopRequested = false
         status.value = Status.Starting
 
         if (!receiverRegistered) {
@@ -401,6 +415,7 @@ class BoxService(private val service: Service, private val platformInterface: Pl
                 stopAndAlert(Alert.StartCommandServer, e.message)
                 return@launch
             }
+            if (stopRequested) return@launch
             startService()
         }
         return Service.START_NOT_STICKY
