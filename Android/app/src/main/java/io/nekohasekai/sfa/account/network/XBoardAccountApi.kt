@@ -7,14 +7,16 @@ import io.nekohasekai.sfa.account.model.BillingPeriod
 import io.nekohasekai.sfa.account.model.CheckoutResult
 import io.nekohasekai.sfa.account.model.PaymentMethod
 import io.nekohasekai.sfa.account.model.PlanOffer
+import io.nekohasekai.sfa.utils.AppHttpTransport
 import io.nekohasekai.sfa.utils.HTTPClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.net.HttpURLConnection
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import java.net.URI
-import java.net.URL
 
 interface AccountApi {
     suspend fun login(email: String, password: String): AccountSession
@@ -157,45 +159,37 @@ class XBoardAccountApi(
         body: String? = null,
         authorization: String? = null,
     ): String {
-        val connection = URL("$baseUrl$path").openConnection() as HttpURLConnection
         try {
-            connection.requestMethod = method
-            connection.connectTimeout = CONNECT_TIMEOUT_MILLIS
-            connection.readTimeout = READ_TIMEOUT_MILLIS
-            connection.instanceFollowRedirects = false
-            connection.setRequestProperty("Accept", "application/json")
-            connection.setRequestProperty("User-Agent", HTTPClient.userAgent)
-            authorization?.let { connection.setRequestProperty("Authorization", it) }
-            if (body != null) {
-                connection.doOutput = true
-                connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
-                connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-            }
+            val builder = Request.Builder()
+                .url("$baseUrl$path")
+                .header("Accept", "application/json")
+                .header("User-Agent", HTTPClient.userAgent)
+            authorization?.let { builder.header("Authorization", it) }
+            val requestBody = body?.toRequestBody(JSON_MEDIA_TYPE)
+            builder.method(method, requestBody)
 
-            val statusCode = connection.responseCode
-            val stream = if (statusCode in 200..299) connection.inputStream else connection.errorStream
-            val response = stream?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }.orEmpty()
-            if (response.isBlank()) {
-                throw AccountApiException("服务器响应为空（HTTP $statusCode）")
+            AppHttpTransport.execute(builder.build()).use { httpResponse ->
+                val statusCode = httpResponse.code
+                val response = httpResponse.body?.string().orEmpty()
+                if (response.isBlank()) {
+                    throw AccountApiException("服务器响应为空（HTTP $statusCode）")
+                }
+                if (!httpResponse.isSuccessful) {
+                    val message = XBoardAccountJsonParser.parseErrorMessage(response)
+                        ?: "请求失败（HTTP $statusCode）"
+                    throw AccountApiException(message)
+                }
+                return response
             }
-            if (statusCode !in 200..299) {
-                val message = XBoardAccountJsonParser.parseErrorMessage(response)
-                    ?: "请求失败（HTTP $statusCode）"
-                throw AccountApiException(message)
-            }
-            return response
         } catch (exception: AccountApiException) {
             throw exception
         } catch (exception: Exception) {
-            throw AccountApiException(exception.message ?: "网络请求失败", exception)
-        } finally {
-            connection.disconnect()
+            throw AccountApiException("网络连接不稳定，请重试", exception)
         }
     }
 
     companion object {
-        private const val CONNECT_TIMEOUT_MILLIS = 15_000
-        private const val READ_TIMEOUT_MILLIS = 20_000
+        private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
 
         private fun encodeQueryValue(value: String): String = java.net.URLEncoder.encode(value, Charsets.UTF_8.name())
 

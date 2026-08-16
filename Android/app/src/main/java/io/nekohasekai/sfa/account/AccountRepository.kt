@@ -343,11 +343,16 @@ class AccountRepository(
     private suspend fun refreshSession(session: AccountSession) {
         runCatching { api.getSubscription(session.authorization) }
             .onSuccess { details ->
-                val syncResult = runCatching { profileSynchronizer.sync(details) }
+                // Authentication and entitlement are complete here. Render the
+                // account before the profile download so subscription network
+                // conditions never leave the login action spinning.
                 _state.value = AccountUiState(
                     session = session,
                     details = details,
                     isLoading = false,
+                )
+                val syncResult = runCatching { profileSynchronizer.sync(details) }
+                _state.value = _state.value.copy(
                     errorMessage = syncResult.exceptionOrNull()?.userMessage(),
                     profileSyncResult = syncResult.getOrNull(),
                 )
