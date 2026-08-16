@@ -34,12 +34,21 @@ class HTTPClient : Closeable {
         val subscriptionUserAgent by lazy {
             "sing-box/${Libbox.version()}"
         }
+
+        private const val LOCAL_SOCKS_PORT = 2333
     }
 
     private val client = Libbox.newHTTPClient()
 
     init {
         client.modernTLS()
+        // Account/profile refreshes are initiated by the app process, whose
+        // sockets are protected from the Android VPN to avoid a routing loop.
+        // Prefer the running core's local SOCKS listener when it is available
+        // so refresh traffic follows the active proxy and its IPv4-only DNS
+        // policy. Libbox falls back to a direct connection while the service
+        // is stopped.
+        client.trySocks5(LOCAL_SOCKS_PORT)
     }
 
     fun get(
