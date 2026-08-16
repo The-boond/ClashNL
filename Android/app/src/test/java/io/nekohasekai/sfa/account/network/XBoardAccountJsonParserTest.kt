@@ -89,17 +89,17 @@ class XBoardAccountJsonParserTest {
     @Test
     fun `base URL policy requires clean HTTPS origin`() {
         assertEquals(
-            "https://nextnexus.qzz.io",
-            XBoardAccountApi.validateBaseUrl("https://nextnexus.qzz.io/"),
+            "https://cjjc.qzz.io",
+            XBoardAccountApi.validateBaseUrl("https://cjjc.qzz.io/"),
         )
         assertThrows(IllegalArgumentException::class.java) {
-            XBoardAccountApi.validateBaseUrl("http://nextnexus.qzz.io")
+            XBoardAccountApi.validateBaseUrl("http://cjjc.qzz.io")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            XBoardAccountApi.validateBaseUrl("https://user@nextnexus.qzz.io")
+            XBoardAccountApi.validateBaseUrl("https://user@cjjc.qzz.io")
         }
         assertThrows(IllegalArgumentException::class.java) {
-            XBoardAccountApi.validateBaseUrl("https://nextnexus.qzz.io?token=value")
+            XBoardAccountApi.validateBaseUrl("https://cjjc.qzz.io?token=value")
         }
     }
 

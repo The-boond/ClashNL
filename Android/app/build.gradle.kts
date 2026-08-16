@@ -78,7 +78,7 @@ android {
         versionName = getVersionProps("VERSION_NAME")
         buildConfigField("String", "CORE_VERSION", "\"${getVersionProps("CORE_VERSION")}\"")
         val accountApiBaseUrl =
-            getProps("ACCOUNT_API_BASE_URL").ifBlank { "https://nextnexus.qzz.io" }
+            getProps("ACCOUNT_API_BASE_URL").ifBlank { "https://cjjc.qzz.io" }
         buildConfigField(
             "String",
             "ACCOUNT_API_BASE_URL",

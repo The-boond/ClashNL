@@ -1,5 +1,6 @@
-ClashNL Android v1.0.3.
+ClashNL Android v1.0.4.
 
+- Use cjjc.qzz.io as the account login and subscription API endpoint.
 - Route account subscription refreshes through the active local SOCKS proxy.
 - Avoid direct IPv6 refresh failures while the VPN service is running.
 - Keep direct subscription refresh available when the VPN service is stopped.
