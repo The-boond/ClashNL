@@ -1,6 +1,5 @@
-ClashNL Android v1.0.5.
+ClashNL Android v1.0.6.
 
-- Prefer IPv4 for account and subscription traffic on unstable dual-stack mobile networks.
-- Fall back from the active local SOCKS proxy to a direct connection during subscription refresh.
-- Stop the login spinner as soon as account entitlement has loaded.
-- Replace low-level socket errors with a concise retry message.
+- Use IPv4 exclusively for account login and subscription HTTP(S) traffic.
+- Reject IPv6-only resolution instead of retrying the same request over IPv6.
+- Keep the concise retry message for transport-level failures.
