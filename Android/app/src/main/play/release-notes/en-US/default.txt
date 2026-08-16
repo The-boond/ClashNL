@@ -1,7 +1,5 @@
-ClashNL Android v1.0.2.
+ClashNL Android v1.0.3.
 
-- Added account sync, plan browsing, and checkout flow.
-- Added network-aware node latency testing with offline results.
-- Refined Chinese and English plan details and billing choices.
-- Fixed startup failures when switching service modes while the previous local service still held its SOCKS port.
-- Added launcher shortcuts for Toggle, Start, and Pause service actions.
+- Route account subscription refreshes through the active local SOCKS proxy.
+- Avoid direct IPv6 refresh failures while the VPN service is running.
+- Keep direct subscription refresh available when the VPN service is stopped.
