@@ -2,7 +2,7 @@ package io.nekohasekai.sfa.utils
 
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.BuildConfig
-import io.nekohasekai.sfa.ktx.unwrap
+import okhttp3.Request
 import java.io.Closeable
 import java.util.Locale
 
@@ -34,40 +34,41 @@ class HTTPClient : Closeable {
         val subscriptionUserAgent by lazy {
             "sing-box/${Libbox.version()}"
         }
-
-        private const val LOCAL_SOCKS_PORT = 2333
-    }
-
-    private val client = Libbox.newHTTPClient()
-
-    init {
-        client.modernTLS()
-        // Account/profile refreshes are initiated by the app process, whose
-        // sockets are protected from the Android VPN to avoid a routing loop.
-        // Prefer the running core's local SOCKS listener when it is available
-        // so refresh traffic follows the active proxy and its IPv4-only DNS
-        // policy. Libbox falls back to a direct connection while the service
-        // is stopped.
-        client.trySocks5(LOCAL_SOCKS_PORT)
     }
 
     fun get(
         url: String,
         requestUserAgent: String = userAgent,
     ): Response {
-        val request = client.newRequest()
-        request.setUserAgent(requestUserAgent)
-        request.setURL(url)
-        val response = request.execute()
-        val headers =
-            listOf(
-                "subscription-userinfo",
-                "profile-update-interval",
-                "profile-web-page-url",
-            ).mapNotNull { key ->
-                response.getHeader(key).trim().takeIf { it.isNotEmpty() }?.let { key to it }
-            }.toMap()
-        return Response(response.content.unwrap, headers)
+        val request = Request.Builder()
+            .url(url)
+            .header("User-Agent", requestUserAgent)
+            .header("Accept", "*/*")
+            .build()
+        try {
+            return AppHttpTransport.execute(request, preferLocalSocks = true).use { response ->
+                val content = response.body?.string().orEmpty()
+                if (!response.isSuccessful) {
+                    throw IllegalStateException("订阅请求失败（HTTP ${response.code}）")
+                }
+                if (content.isBlank()) {
+                    throw IllegalStateException("订阅响应为空")
+                }
+                val headers =
+                    listOf(
+                        "subscription-userinfo",
+                        "profile-update-interval",
+                        "profile-web-page-url",
+                    ).mapNotNull { key ->
+                        response.header(key)?.trim()?.takeIf { it.isNotEmpty() }?.let { key to it }
+                    }.toMap()
+                Response(content, headers)
+            }
+        } catch (exception: IllegalStateException) {
+            throw exception
+        } catch (exception: Exception) {
+            throw IllegalStateException("订阅同步失败，请检查网络后重试", exception)
+        }
     }
 
     fun getString(url: String): String = get(url).content
@@ -76,7 +77,5 @@ class HTTPClient : Closeable {
 
     fun getSubscriptionString(url: String): String = getSubscription(url).content
 
-    override fun close() {
-        client.close()
-    }
+    override fun close() = Unit
 }
