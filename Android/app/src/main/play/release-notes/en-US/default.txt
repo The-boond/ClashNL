@@ -1,5 +1,5 @@
-ClashNL Android v1.0.6.
+ClashNL Android v1.0.7.
 
-- Use IPv4 exclusively for account login and subscription HTTP(S) traffic.
-- Reject IPv6-only resolution instead of retrying the same request over IPv6.
-- Keep the concise retry message for transport-level failures.
+- Keep account login and subscription downloads on IPv4.
+- Resolve subscription node endpoints through IPv4 only.
+- Override profile-level IPv6 resolver preferences for node connectivity.
