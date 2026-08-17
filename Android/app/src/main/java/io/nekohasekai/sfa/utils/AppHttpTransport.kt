@@ -10,6 +10,8 @@ import okhttp3.Request
 import okhttp3.Response
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
@@ -18,12 +20,32 @@ import java.util.concurrent.TimeUnit
  *
  * Account and subscription requests prefer IPv4, but retain the platform's
  * IPv6/NAT64 result when the physical network has no usable IPv4 result.
- * Binding the socket and DNS lookup to the underlying non-VPN network also
- * prevents these control-plane requests from looping through ClashNL's own
- * tunnel while it is running.
+ * While the core is running, app traffic first uses its local SOCKS listener
+ * so account, subscription, and exit-IP requests follow the selected proxy.
+ * The underlying non-VPN network remains the fallback for stopped or
+ * unavailable core service states.
  */
 object AppHttpTransport {
-    fun execute(request: Request): Response {
+    private const val LOCAL_SOCKS_PORT = 2333
+
+    fun execute(
+        request: Request,
+        preferLocalSocks: Boolean = false,
+    ): Response {
+        if (preferLocalSocks) {
+            runCatching {
+                return baseBuilder()
+                    .proxy(
+                        Proxy(
+                            Proxy.Type.SOCKS,
+                            InetSocketAddress.createUnresolved("127.0.0.1", LOCAL_SOCKS_PORT),
+                        ),
+                    ).build()
+                    .newCall(request)
+                    .execute()
+            }
+        }
+
         val network = underlyingNetwork()
         val dns = object : Dns {
             override fun lookup(hostname: String): List<InetAddress> {

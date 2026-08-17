@@ -11,6 +11,7 @@ import io.nekohasekai.sfa.account.network.AccountApi
 import io.nekohasekai.sfa.account.network.XBoardAccountApi
 import io.nekohasekai.sfa.account.security.AccountSessionStore
 import io.nekohasekai.sfa.account.security.AndroidAccountSessionStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,7 +33,7 @@ class AccountRepository(
 
     suspend fun login(email: String, password: String) = operationMutex.withLock {
         _state.value = _state.value.copy(isLoading = true, errorMessage = null, profileSyncResult = null)
-        runCatching {
+        runCatchingPreservingCancellation {
             api.login(email.trim(), password).also(sessionStore::saveSession)
         }.onSuccess { session ->
             refreshSession(session)
@@ -65,7 +66,7 @@ class AccountRepository(
     suspend fun loadPurchaseOptions() = operationMutex.withLock {
         val session = requireSession() ?: return@withLock
         _purchaseState.value = _purchaseState.value.copy(isLoading = true, errorMessage = null)
-        runCatching {
+        runCatchingPreservingCancellation {
             val plans = api.getPlans(session.authorization)
             val paymentMethods = api.getPaymentMethods(session.authorization)
             val pendingOrders = api.getPendingOrders(session.authorization)
@@ -75,7 +76,11 @@ class AccountRepository(
             var recoveredOrder = pendingOrder
             var statusMessage: String? = null
             if (recoveredOrder == null && !storedTradeNo.isNullOrBlank()) {
-                when (runCatching { api.checkOrder(session.authorization, storedTradeNo) }.getOrNull()) {
+                when (
+                    runCatchingPreservingCancellation {
+                        api.checkOrder(session.authorization, storedTradeNo)
+                    }.getOrNull()
+                ) {
                     ORDER_PENDING, ORDER_PROCESSING -> {
                         recoveredOrder = AccountOrder(
                             tradeNo = storedTradeNo,
@@ -144,7 +149,7 @@ class AccountRepository(
             statusMessage = null,
             checkoutResult = null,
         )
-        runCatching {
+        runCatchingPreservingCancellation {
             val tradeNo = api.createOrder(session.authorization, planId, period)
             sessionStore.pendingTradeNo = tradeNo
             val checkout = api.checkout(session.authorization, tradeNo, methodId)
@@ -160,7 +165,9 @@ class AccountRepository(
                     statusMessage = "订单已完成，套餐与订阅已刷新",
                 )
             } else {
-                val pendingOrder = runCatching { api.getPendingOrders(session.authorization) }
+                val pendingOrder = runCatchingPreservingCancellation {
+                    api.getPendingOrders(session.authorization)
+                }
                     .getOrNull()
                     ?.firstOrNull { it.tradeNo == tradeNo }
                     ?: AccountOrder(
@@ -187,7 +194,9 @@ class AccountRepository(
             }
         }.onFailure { error ->
             val pendingTradeNo = sessionStore.pendingTradeNo
-            val pendingOrder = runCatching { api.getPendingOrders(session.authorization) }
+            val pendingOrder = runCatchingPreservingCancellation {
+                api.getPendingOrders(session.authorization)
+            }
                 .getOrNull()
                 ?.firstOrNull { pendingTradeNo == null || it.tradeNo == pendingTradeNo }
                 ?: pendingTradeNo?.let {
@@ -219,7 +228,7 @@ class AccountRepository(
             return@withLock
         }
         _purchaseState.value = _purchaseState.value.copy(isLoading = true, errorMessage = null)
-        runCatching { api.checkOrder(session.authorization, tradeNo) }
+        runCatchingPreservingCancellation { api.checkOrder(session.authorization, tradeNo) }
             .onSuccess { status ->
                 when (status) {
                     ORDER_COMPLETED, ORDER_DISCOUNTED -> {
@@ -261,7 +270,7 @@ class AccountRepository(
             errorMessage = null,
             checkoutResult = null,
         )
-        runCatching { api.checkout(session.authorization, tradeNo, methodId) }
+        runCatchingPreservingCancellation { api.checkout(session.authorization, tradeNo, methodId) }
             .onSuccess { checkout ->
                 if (checkout.completedWithoutGateway) {
                     sessionStore.pendingTradeNo = null
@@ -288,7 +297,7 @@ class AccountRepository(
         val tradeNo = sessionStore.pendingTradeNo ?: _purchaseState.value.pendingOrder?.tradeNo
         if (tradeNo.isNullOrBlank()) return@withLock
         _purchaseState.value = _purchaseState.value.copy(isLoading = true, errorMessage = null)
-        runCatching { api.cancelOrder(session.authorization, tradeNo) }
+        runCatchingPreservingCancellation { api.cancelOrder(session.authorization, tradeNo) }
             .onSuccess {
                 sessionStore.pendingTradeNo = null
                 loadPurchaseOptionsWithoutLock(session, "待支付订单已取消")
@@ -309,7 +318,7 @@ class AccountRepository(
         session: AccountSession,
         message: String? = null,
     ) {
-        runCatching {
+        runCatchingPreservingCancellation {
             Triple(
                 api.getPlans(session.authorization),
                 api.getPaymentMethods(session.authorization),
@@ -341,29 +350,38 @@ class AccountRepository(
     }
 
     private suspend fun refreshSession(session: AccountSession) {
-        runCatching { api.getSubscription(session.authorization) }
-            .onSuccess { details ->
-                // Authentication and entitlement are complete here. Render the
-                // account before the profile download so subscription network
-                // conditions never leave the login action spinning.
-                _state.value = AccountUiState(
-                    session = session,
-                    details = details,
-                    isLoading = false,
-                )
-                val syncResult = runCatching { profileSynchronizer.sync(details) }
-                _state.value = _state.value.copy(
-                    errorMessage = syncResult.exceptionOrNull()?.userMessage(),
-                    profileSyncResult = syncResult.getOrNull(),
-                )
-            }
-            .onFailure { error ->
-                _state.value = AccountUiState(
-                    session = session,
-                    isLoading = false,
-                    errorMessage = error.userMessage(),
-                )
-            }
+        try {
+            runCatchingPreservingCancellation { api.getSubscription(session.authorization) }
+                .onSuccess { details ->
+                    // Authentication and entitlement are complete here. Render the
+                    // account before the profile download so subscription network
+                    // conditions never leave the login action spinning.
+                    _state.value = AccountUiState(
+                        session = session,
+                        details = details,
+                        isLoading = false,
+                    )
+                    val syncResult = runCatchingPreservingCancellation { profileSynchronizer.sync(details) }
+                    _state.value = _state.value.copy(
+                        errorMessage = syncResult.exceptionOrNull()?.userMessage(),
+                        profileSyncResult = syncResult.getOrNull(),
+                    )
+                }
+                .onFailure { error ->
+                    _state.value = AccountUiState(
+                        session = session,
+                        isLoading = false,
+                        errorMessage = error.userMessage(),
+                    )
+                }
+        } catch (error: CancellationException) {
+            _state.value = _state.value.copy(
+                session = session,
+                isLoading = false,
+                errorMessage = if (_state.value.details == null) "刷新已取消，请重试" else null,
+            )
+            throw error
+        }
     }
 
     private fun Throwable.userMessage(): String = message?.takeIf { it.isNotBlank() } ?: "请求失败，请稍后重试"
@@ -375,6 +393,14 @@ class AccountRepository(
         private const val ORDER_COMPLETED = 3
         private const val ORDER_DISCOUNTED = 4
     }
+}
+
+private inline fun <T> runCatchingPreservingCancellation(block: () -> T): Result<T> = try {
+    Result.success(block())
+} catch (error: CancellationException) {
+    throw error
+} catch (error: Throwable) {
+    Result.failure(error)
 }
 
 object AccountRepositoryProvider {

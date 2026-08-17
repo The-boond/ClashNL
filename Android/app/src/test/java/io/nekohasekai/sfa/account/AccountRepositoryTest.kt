@@ -11,6 +11,7 @@ import io.nekohasekai.sfa.account.model.PlanOffer
 import io.nekohasekai.sfa.account.model.PlanPrice
 import io.nekohasekai.sfa.account.network.AccountApi
 import io.nekohasekai.sfa.account.security.AccountSessionStore
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -49,6 +50,48 @@ class AccountRepositoryTest {
         assertTrue(repository.state.value.isSignedIn)
         assertEquals("暂时不可用", repository.state.value.errorMessage)
         assertNull(repository.state.value.details)
+    }
+
+    @Test
+    fun `profile sync cancellation is propagated without rendering an error`() = runBlocking {
+        val store = signedInStore()
+        val repository = AccountRepository(
+            FakeAccountApi(),
+            store,
+            FakeProfileSync(CancellationException("Job was cancelled")),
+        )
+
+        var cancellation: CancellationException? = null
+        try {
+            repository.refresh()
+        } catch (error: CancellationException) {
+            cancellation = error
+        }
+
+        assertNotNull(cancellation)
+        assertNotNull(repository.state.value.details)
+        assertNull(repository.state.value.errorMessage)
+        assertFalse(repository.state.value.isLoading)
+    }
+
+    @Test
+    fun `subscription cancellation exposes retry state instead of raw job error`() = runBlocking {
+        val store = signedInStore()
+        val repository = AccountRepository(
+            FakeAccountApi(subscriptionError = CancellationException("Job was cancelled")),
+            store,
+            FakeProfileSync(),
+        )
+
+        try {
+            repository.refresh()
+        } catch (_: CancellationException) {
+            // Expected: cancellation must remain structured concurrency.
+        }
+
+        assertTrue(repository.state.value.isSignedIn)
+        assertEquals("刷新已取消，请重试", repository.state.value.errorMessage)
+        assertFalse(repository.state.value.isLoading)
     }
 
     @Test
@@ -208,11 +251,14 @@ class AccountRepositoryTest {
         }
     }
 
-    private class FakeProfileSync : AccountProfileSync {
+    private class FakeProfileSync(
+        private val error: Throwable? = null,
+    ) : AccountProfileSync {
         var calls = 0
 
         override suspend fun sync(details: AccountDetails): AccountProfileSyncResult {
             calls += 1
+            error?.let { throw it }
             return AccountProfileSyncResult(42L, created = true, contentChanged = true)
         }
     }

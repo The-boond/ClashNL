@@ -46,7 +46,7 @@ class HTTPClient : Closeable {
             .header("Accept", "*/*")
             .build()
         try {
-            return AppHttpTransport.execute(request).use { response ->
+            return AppHttpTransport.execute(request, preferLocalSocks = true).use { response ->
                 val content = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
                     throw IllegalStateException("订阅请求失败（HTTP ${response.code}）")

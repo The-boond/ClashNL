@@ -168,7 +168,7 @@ class XBoardAccountApi(
             val requestBody = body?.toRequestBody(JSON_MEDIA_TYPE)
             builder.method(method, requestBody)
 
-            AppHttpTransport.execute(builder.build()).use { httpResponse ->
+            AppHttpTransport.execute(builder.build(), preferLocalSocks = true).use { httpResponse ->
                 val statusCode = httpResponse.code
                 val response = httpResponse.body?.string().orEmpty()
                 if (response.isBlank()) {
