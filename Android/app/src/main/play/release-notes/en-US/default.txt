@@ -1,5 +1,5 @@
-ClashNL Android v1.0.7.
+ClashNL Android v1.0.8.
 
-- Keep account login and subscription downloads on IPv4.
-- Resolve subscription node endpoints through IPv4 only.
-- Override profile-level IPv6 resolver preferences for node connectivity.
+- Keep subscription node endpoints on IPv4.
+- Bind account and subscription HTTP traffic to the underlying non-VPN network.
+- Prefer IPv4 while retaining NAT64 fallback on IPv6-only mobile networks.

@@ -8,19 +8,24 @@ import java.net.UnknownHostException
 
 class AppHttpTransportTest {
     @Test
-    fun `keeps only IPv4 when host has A and AAAA records`() {
+    fun `puts IPv4 first when host has A and AAAA records`() {
         val ipv6 = InetAddress.getByName("2606:4700:3035::ac43:d175")
         val ipv4 = InetAddress.getByName("104.21.23.63")
 
-        assertEquals(listOf(ipv4), AppHttpTransport.ipv4Only("example.com", listOf(ipv6, ipv4)))
+        assertEquals(listOf(ipv4, ipv6), AppHttpTransport.preferIPv4("example.com", listOf(ipv6, ipv4)))
     }
 
     @Test
-    fun `rejects IPv6-only host`() {
+    fun `keeps NAT64 or IPv6 result when no IPv4 result exists`() {
         val ipv6 = InetAddress.getByName("2606:4700:3035::ac43:d175")
 
+        assertEquals(listOf(ipv6), AppHttpTransport.preferIPv4("ipv6-only.example", listOf(ipv6)))
+    }
+
+    @Test
+    fun `rejects an empty DNS result`() {
         assertThrows(UnknownHostException::class.java) {
-            AppHttpTransport.ipv4Only("ipv6-only.example", listOf(ipv6))
+            AppHttpTransport.preferIPv4("missing.example", emptyList())
         }
     }
 }
