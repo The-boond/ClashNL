@@ -27,7 +27,8 @@ object ClashConfigNormalizer {
         // starts, so checking the original document first would skip migrations.
         val migrated = SingBoxConfigMigrator.migrate(content)
         if (migrated != null) {
-            val normalized = migrated.content.takeIf { migrated.changed } ?: content
+            val compatible = migrated.content.takeIf { migrated.changed } ?: content
+            val normalized = IPv4OnlyProfilePolicy.enforce(compatible)
             try {
                 Libbox.checkConfig(normalized)
                 return Result(normalized, SourceFormat.SING_BOX)
@@ -55,7 +56,7 @@ object ClashConfigNormalizer {
             }
 
         try {
-            val converted = Libbox.convertClashConfig(content).unwrap
+            val converted = IPv4OnlyProfilePolicy.enforce(Libbox.convertClashConfig(content).unwrap)
             require(converted.isNotBlank()) { "Clash converter returned an empty configuration" }
             Libbox.checkConfig(converted)
             return Result(converted, SourceFormat.CLASH)
