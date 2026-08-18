@@ -30,9 +30,4 @@ open sing-box.xcodeproj
 两个平台各自保存 `Core/`、`Examples/`、`scripts/`、隐私说明和品牌源图，
 因此可以单独复制、构建和维护。仓库根目录只保留版本控制、CI、总览和总许可证。
 
-ClashNL 主 Logo：
-
-- [Android/Branding/ClashNL-logo-1024.png](Android/Branding/ClashNL-logo-1024.png)
-- [iOS/Branding/ClashNL-logo-1024.png](iOS/Branding/ClashNL-logo-1024.png)
-
 代码按 [GPL-3.0-or-later](LICENSE) 分发。
