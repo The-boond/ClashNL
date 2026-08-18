@@ -8,9 +8,10 @@ import io.nekohasekai.libbox.ProfileContent
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.config.ClashConfigNormalizer
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.repository.RemoteProfileRepository
+import io.nekohasekai.sfa.repository.ProfileRemoteRepository
 import io.nekohasekai.sfa.repository.SubscriptionMetadataParser
 import io.nekohasekai.sfa.utils.HTTPClient
 import io.nekohasekai.sfa.utils.ProfileConfigStore
@@ -220,7 +221,7 @@ class ProfileImportHandler(private val context: Context) {
     }
 
     private suspend fun importRemoteProfile(name: String, url: String): ImportResult {
-        val fetched = RemoteProfileRepository.fetchNormalized(url)
+        val fetched = ProfileRemoteRepository.fetch(ProfileCore.SingBox, url)
         val typedProfile =
             TypedProfile().apply {
                 type = TypedProfile.Type.Remote

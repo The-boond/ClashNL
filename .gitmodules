@@ -1,3 +1,7 @@
 [submodule "iOS/Frameworks/Runestone"]
 	path = iOS/Frameworks/Runestone
 	url = https://github.com/nekohasekai/Runestone.git
+[submodule "Android/Core/mihomo-android"]
+	path = Android/Core/mihomo-android
+	url = https://github.com/MetaCubeX/ClashMetaForAndroid.git
+	branch = main

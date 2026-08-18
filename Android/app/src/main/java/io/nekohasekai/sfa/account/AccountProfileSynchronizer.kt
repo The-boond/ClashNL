@@ -9,7 +9,7 @@ import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.repository.RemoteProfileRepository
+import io.nekohasekai.sfa.repository.ProfileRemoteRepository
 import io.nekohasekai.sfa.repository.RemoteProfileUrlPolicy
 import io.nekohasekai.sfa.utils.ProfileConfigStore
 import kotlinx.coroutines.Dispatchers
@@ -49,16 +49,16 @@ class AccountProfileSynchronizer(
         details: AccountDetails,
         remoteUrl: String,
     ): AccountProfileSyncResult {
-        val fetched = RemoteProfileRepository.fetchNormalized(remoteUrl)
         val typedProfile = TypedProfile().apply {
             type = TypedProfile.Type.Remote
             remoteURL = remoteUrl
             autoUpdate = true
             autoUpdateInterval = DEFAULT_UPDATE_INTERVAL_MINUTES
             lastUpdated = Date()
-            fetched.metadata?.replaceOn(this)
-            details.applySubscriptionMetadata(this)
         }
+        val fetched = ProfileRemoteRepository.fetch(typedProfile.core, remoteUrl)
+        fetched.metadata?.replaceOn(typedProfile)
+        details.applySubscriptionMetadata(typedProfile)
         val profile = Profile(
             name = managedProfileName(details),
             typed = typedProfile,
@@ -86,7 +86,7 @@ class AccountProfileSynchronizer(
         profile.typed.remoteURL = remoteUrl
         profile.typed.autoUpdate = true
         profile.typed.autoUpdateInterval = DEFAULT_UPDATE_INTERVAL_MINUTES
-        val update = RemoteProfileRepository.update(profile)
+        val update = ProfileRemoteRepository.update(profile)
         details.applySubscriptionMetadata(profile.typed)
         ProfileManager.update(profile)
         return AccountProfileSyncResult(

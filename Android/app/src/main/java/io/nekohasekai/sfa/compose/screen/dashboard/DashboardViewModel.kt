@@ -4,7 +4,7 @@ import androidx.lifecycle.viewModelScope
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.StatusMessage
-import io.nekohasekai.sfa.bg.BoxService
+import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.compose.base.BaseViewModel
 import io.nekohasekai.sfa.compose.base.GlobalEventBus
 import io.nekohasekai.sfa.compose.base.UiEvent
@@ -13,7 +13,8 @@ import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.repository.RemoteProfileRepository
+import io.nekohasekai.sfa.repository.ProfileRemoteRepository
+import io.nekohasekai.sfa.runtime.ProfileRuntime
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
 import io.nekohasekai.sfa.utils.CommandClient
 import io.nekohasekai.sfa.utils.CommandTarget
@@ -259,7 +260,7 @@ class DashboardViewModel :
     private fun stopService() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                BoxService.stop()
+                ProfileRuntime.stopActive(Application.application)
                 // Status will be updated via updateServiceStatus callback
             } catch (e: Exception) {
                 sendError(e)
@@ -286,15 +287,29 @@ class DashboardViewModel :
             try {
                 updateState { copy(isLoading = true) }
                 val profile = ProfileManager.get(profileId) ?: return@launch
+                val previousCore = ProfileRuntime.selectedCore()
+                val coreChanged = previousCore != profile.typed.core
+                val serviceWasRunning = _serviceStatus.value == Status.Started
 
+                // Stop the currently active core before changing the selected
+                // profile, so stopActive still resolves the old owner.
+                if (serviceWasRunning && coreChanged) {
+                    ProfileRuntime.stopActive(Application.application)
+                    for (i in 0 until 50) {
+                        if (_serviceStatus.value == Status.Stopped) break
+                        delay(100L)
+                    }
+                }
                 Settings.selectedProfile = profileId
 
                 // Check if service is running
-                if (_serviceStatus.value == Status.Started) {
-                    val restart = Settings.rebuildServiceMode()
-                    if (restart) {
+                if (serviceWasRunning) {
+                    if (coreChanged) {
+                        GlobalEventBus.emit(UiEvent.RequestReconnectService)
+                        GlobalEventBus.emit(UiEvent.RequestStartService)
+                    } else if (profile.typed.core == io.nekohasekai.sfa.database.ProfileCore.SingBox && Settings.rebuildServiceMode()) {
                         // Need full restart
-                        BoxService.stop()
+                        ProfileRuntime.stopActive(Application.application)
                         for (i in 0 until 50) {
                             if (_serviceStatus.value == Status.Stopped) {
                                 break
@@ -304,8 +319,8 @@ class DashboardViewModel :
                         GlobalEventBus.emit(UiEvent.RequestReconnectService)
                         GlobalEventBus.emit(UiEvent.RequestStartService)
                     } else {
-                        // Just reload
-                        Libbox.newStandaloneCommandClient().serviceReload()
+                        // A same-core profile switch is a config reload.
+                        ProfileRuntime.reloadSelectedIfRunning(Application.application)
                     }
                 }
 
@@ -363,7 +378,7 @@ class DashboardViewModel :
             }
 
             try {
-                val contentChanged = RemoteProfileRepository.update(profile).contentChanged
+                val contentChanged = ProfileRemoteRepository.update(profile).contentChanged
 
                 // Reload profiles
                 loadProfiles()
@@ -381,9 +396,7 @@ class DashboardViewModel :
 
                 // Restart service if this is the selected profile and content changed
                 if (contentChanged && profile.id == Settings.selectedProfile) {
-                    withContext(Dispatchers.Main) {
-                        sendGlobalEvent(UiEvent.RequestReconnectService)
-                    }
+                    ProfileRuntime.reloadSelectedIfRunning(Application.application)
                 }
             } catch (e: Exception) {
                 sendErrorMessage("Failed to update profile: ${e.message}")

@@ -56,6 +56,7 @@ object SettingsKey {
 
     // cache
     const val STARTED_BY_USER = "started_by_user"
+    const val ACTIVE_PROFILE_CORE = "active_profile_core"
     const val CACHED_UPDATE_INFO = "cached_update_info"
     const val CACHED_APK_PATH = "cached_apk_path"
     const val LAST_SHOWN_UPDATE_VERSION = "last_shown_update_version"

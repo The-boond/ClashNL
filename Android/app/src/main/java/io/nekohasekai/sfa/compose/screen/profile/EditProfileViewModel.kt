@@ -13,7 +13,8 @@ import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.repository.RemoteProfileRepository
+import io.nekohasekai.sfa.repository.ProfileRemoteRepository
+import io.nekohasekai.sfa.runtime.ProfileRuntime
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -254,7 +255,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
             try {
                 var selectedProfileUpdated = false
 
-                val result = RemoteProfileRepository.update(profile)
+                val result = ProfileRemoteRepository.update(profile)
                 if (result.contentChanged && profile.id == Settings.selectedProfile) {
                     selectedProfileUpdated = true
                 }
@@ -271,7 +272,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
                 // Reload service if needed
                 if (selectedProfileUpdated) {
                     try {
-                        Libbox.newStandaloneCommandClient().serviceReload()
+                        ProfileRuntime.reloadSelectedIfRunning(getApplication())
                     } catch (e: Exception) {
                         // Service reload errors are not critical
                     }

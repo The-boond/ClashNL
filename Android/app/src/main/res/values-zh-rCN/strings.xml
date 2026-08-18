@@ -1,5 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+    <string name="profile_core">内核</string>
+    <string name="profile_core_sing_box">sing-box</string>
+    <string name="profile_core_mihomo">Mihomo</string>
+    <string name="profile_core_mihomo_hint">仅对 Clash/Mihomo YAML 订阅选择 Mihomo；已有配置将继续使用 sing-box。</string>
     <!-- App -->
     <string name="app_name" translatable="false">ClashNl</string>
     <string name="app_version_title">应用版本</string>

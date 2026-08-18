@@ -70,7 +70,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.core.os.ConfigurationCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -84,7 +83,6 @@ import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.BuildConfig
 import io.nekohasekai.sfa.R
-import io.nekohasekai.sfa.bg.BoxService
 import io.nekohasekai.sfa.bg.CrashReportManager
 import io.nekohasekai.sfa.bg.OOMReportManager
 import io.nekohasekai.sfa.bg.ServiceConnection
@@ -125,9 +123,11 @@ import io.nekohasekai.sfa.constant.Action
 import io.nekohasekai.sfa.constant.Alert
 import io.nekohasekai.sfa.constant.ServiceMode
 import io.nekohasekai.sfa.constant.Status
+import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.ktx.hasPermission
 import io.nekohasekai.sfa.ktx.launchCustomTab
+import io.nekohasekai.sfa.runtime.ProfileRuntime
 import io.nekohasekai.sfa.update.UpdateState
 import io.nekohasekai.sfa.utils.RemoteControlManager
 import io.nekohasekai.sfa.vendor.Vendor
@@ -347,7 +347,7 @@ class MainActivity :
             when (action) {
                 HomeShortcutAction.Toggle -> {
                     if (serviceActive) {
-                        BoxService.stop()
+                        withContext(Dispatchers.IO) { ProfileRuntime.stopActive(this@MainActivity) }
                     } else if (status != Status.Stopping) {
                         startService()
                     }
@@ -360,7 +360,7 @@ class MainActivity :
                 }
 
                 HomeShortcutAction.Pause -> {
-                    BoxService.stop()
+                    withContext(Dispatchers.IO) { ProfileRuntime.stopActive(this@MainActivity) }
                 }
             }
         }
@@ -400,25 +400,23 @@ class MainActivity :
 
     private fun startService0() {
         lifecycleScope.launch(Dispatchers.IO) {
-            if (Settings.rebuildServiceMode()) {
+            val core = ProfileRuntime.selectedCore()
+            if (core == ProfileCore.SingBox && Settings.rebuildServiceMode()) {
                 stopLocalServiceAndWait()
                 connection.reconnect()
             }
-            if (Settings.serviceMode == ServiceMode.VPN) {
+            if (core == ProfileCore.Mihomo || Settings.serviceMode == ServiceMode.VPN) {
                 if (prepare()) {
                     return@launch
                 }
             }
-            val intent = Intent(Application.application, Settings.serviceClass())
-            withContext(Dispatchers.Main) {
-                ContextCompat.startForegroundService(this@MainActivity, intent)
-            }
-            Settings.startedByUser = true
+            connection.reconnect()
+            ProfileRuntime.startSelected(this@MainActivity)
         }
     }
 
     private suspend fun stopLocalServiceAndWait() {
-        BoxService.stop()
+        ProfileRuntime.stopActive(this)
         withContext(Dispatchers.Main) {
             repeat(50) {
                 if (currentServiceStatus == Status.Stopped) return@withContext
@@ -1455,7 +1453,7 @@ class MainActivity :
             return
         }
 
-        BoxService.stop()
+        ProfileRuntime.stopActive(this)
         while (true) {
             when (currentServiceStatus) {
                 Status.Stopped -> {

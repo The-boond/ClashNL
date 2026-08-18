@@ -190,6 +190,8 @@ android {
 }
 
 dependencies {
+    implementation(project(":mihomo-bridge"))
+
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
 
     // libbox
@@ -362,6 +364,7 @@ dependencies {
     "androidTestOtherImplementation"(composeBom24)
     "androidTestOtherLegacyImplementation"(composeBom21)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 
     // Common Compose-related libraries
     implementation("sh.calvin.reorderable:reorderable:3.1.0")

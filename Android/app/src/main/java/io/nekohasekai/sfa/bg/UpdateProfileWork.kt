@@ -10,12 +10,12 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.repository.RemoteProfileRepository
+import io.nekohasekai.sfa.repository.ProfileRemoteRepository
+import io.nekohasekai.sfa.runtime.ProfileRuntime
 import java.util.concurrent.TimeUnit
 
 class UpdateProfileWork {
@@ -81,7 +81,7 @@ class UpdateProfileWork {
                     continue
                 }
                 try {
-                    val result = RemoteProfileRepository.update(profile)
+                    val result = ProfileRemoteRepository.update(profile)
                     if (result.contentChanged && profile.id == selectedProfile) {
                         selectedProfileUpdated = true
                     }
@@ -92,7 +92,7 @@ class UpdateProfileWork {
             }
             if (selectedProfileUpdated) {
                 runCatching {
-                    Libbox.newStandaloneCommandClient().serviceReload()
+                    ProfileRuntime.reloadSelectedIfRunning(applicationContext)
                 }
             }
             return if (success) {
