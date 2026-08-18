@@ -62,23 +62,22 @@ object IPv4OnlyProfilePolicy {
         )
     }
 
-    private fun ipv4OnlyResolver(resolver: JsonElement): JsonElement =
-        when (resolver) {
-            is JsonPrimitive ->
-                JsonObject(
-                    linkedMapOf(
-                        "server" to resolver,
-                        "strategy" to JsonPrimitive(IPV4_ONLY),
-                    ),
-                )
+    private fun ipv4OnlyResolver(resolver: JsonElement): JsonElement = when (resolver) {
+        is JsonPrimitive ->
+            JsonObject(
+                linkedMapOf(
+                    "server" to resolver,
+                    "strategy" to JsonPrimitive(IPV4_ONLY),
+                ),
+            )
 
-            is JsonObject ->
-                JsonObject(
-                    resolver.toMutableMap().apply {
-                        put("strategy", JsonPrimitive(IPV4_ONLY))
-                    },
-                )
+        is JsonObject ->
+            JsonObject(
+                resolver.toMutableMap().apply {
+                    put("strategy", JsonPrimitive(IPV4_ONLY))
+                },
+            )
 
-            else -> resolver
-        }
+        else -> resolver
+    }
 }
