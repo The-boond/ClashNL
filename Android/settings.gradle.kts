@@ -16,6 +16,7 @@ dependencyResolutionManagement {
 }
 rootProject.name = "ClashNl-Android"
 include(":app")
+include(":mihomo-bridge")
 include(":libxposed-api")
 project(":libxposed-api").projectDir = file("third_party/libxposed-api")
 include(":terminal-emulator")

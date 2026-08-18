@@ -34,9 +34,11 @@ import io.nekohasekai.sfa.config.ProfileNodeSelection
 import io.nekohasekai.sfa.constant.Action
 import io.nekohasekai.sfa.constant.Alert
 import io.nekohasekai.sfa.constant.Status
+import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.ktx.hasPermission
+import io.nekohasekai.sfa.runtime.ProfileRuntime
 import io.nekohasekai.sfa.utils.CommandTarget
 import io.nekohasekai.sfa.utils.ProfileConfigStore
 import io.nekohasekai.sfa.vendor.Vendor
@@ -52,6 +54,10 @@ class BoxService(private val service: Service, private val platformInterface: Pl
     companion object {
         private const val PROFILE_UPDATE_INTERVAL = 15L * 60 * 1000 // 15 minutes in milliseconds
         private const val TAG = "BoxService"
+
+        @Volatile
+        var isRunning = false
+            private set
 
         fun start() {
             val intent =
@@ -343,6 +349,8 @@ class BoxService(private val service: Service, private val platformInterface: Pl
 //              Seq.destroyRef(refnum)
             }
             Settings.startedByUser = false
+            isRunning = false
+            ProfileRuntime.markStopped(ProfileCore.SingBox)
             withContext(Dispatchers.Main) {
                 status.value = Status.Stopped
                 service.stopSelf()
@@ -361,6 +369,8 @@ class BoxService(private val service: Service, private val platformInterface: Pl
     private suspend fun stopAndAlert(type: Alert, message: String? = null) {
         stopRequested = true
         Settings.startedByUser = false
+        isRunning = false
+        ProfileRuntime.markStopped(ProfileCore.SingBox)
         val pfd = fileDescriptor
         if (pfd != null) {
             pfd.close()
@@ -390,6 +400,7 @@ class BoxService(private val service: Service, private val platformInterface: Pl
     internal fun onStartCommand(): Int {
         if (status.value != Status.Stopped) return Service.START_NOT_STICKY
         stopRequested = false
+        isRunning = true
         status.value = Status.Starting
 
         if (!receiverRegistered) {
@@ -424,6 +435,8 @@ class BoxService(private val service: Service, private val platformInterface: Pl
     internal fun onBind(): IBinder = binder
 
     internal fun onDestroy() {
+        isRunning = false
+        ProfileRuntime.markStopped(ProfileCore.SingBox)
         binder.close()
     }
 

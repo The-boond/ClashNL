@@ -1,5 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
+    <string name="profile_core">Core</string>
+    <string name="profile_core_sing_box">sing-box</string>
+    <string name="profile_core_mihomo">Mihomo</string>
+    <string name="profile_core_mihomo_hint">Choose Mihomo only for Clash/Mihomo YAML subscriptions. Existing profiles remain on sing-box.</string>
     <!-- App -->
     <string name="app_name" translatable="false">ClashNl</string>
     <string name="app_version_title">App version</string>

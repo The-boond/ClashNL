@@ -34,6 +34,11 @@ class HTTPClient : Closeable {
         val subscriptionUserAgent by lazy {
             "sing-box/${Libbox.version()}"
         }
+
+        /** Requests the Clash/Mihomo subscription representation from XBoard. */
+        val mihomoSubscriptionUserAgent by lazy {
+            "clash.meta/${BuildConfig.VERSION_NAME}"
+        }
     }
 
     fun get(
@@ -74,6 +79,8 @@ class HTTPClient : Closeable {
     fun getString(url: String): String = get(url).content
 
     fun getSubscription(url: String): Response = get(url, subscriptionUserAgent)
+
+    fun getMihomoSubscription(url: String): Response = get(url, mihomoSubscriptionUserAgent)
 
     fun getSubscriptionString(url: String): String = getSubscription(url).content
 

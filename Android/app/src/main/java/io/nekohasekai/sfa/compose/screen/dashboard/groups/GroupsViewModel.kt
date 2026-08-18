@@ -2,13 +2,16 @@ package io.nekohasekai.sfa.compose.screen.dashboard.groups
 
 import androidx.lifecycle.viewModelScope
 import io.nekohasekai.libbox.OutboundGroup
+import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.compose.base.BaseViewModel
 import io.nekohasekai.sfa.compose.base.ScreenEvent
 import io.nekohasekai.sfa.compose.model.Group
 import io.nekohasekai.sfa.compose.model.GroupItem
+import io.nekohasekai.sfa.compose.model.toGroup
 import io.nekohasekai.sfa.compose.model.toList
 import io.nekohasekai.sfa.config.ProfileNodeSelection
 import io.nekohasekai.sfa.constant.Status
+import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.latency.LatencyKey
@@ -21,9 +24,13 @@ import io.nekohasekai.sfa.latency.LatencyTestCoordinator
 import io.nekohasekai.sfa.latency.LatencyTestMethod
 import io.nekohasekai.sfa.latency.LiveCoreLatencyProbe
 import io.nekohasekai.sfa.latency.LiveGroupUpdate
+import io.nekohasekai.sfa.latency.MihomoLatencyProbe
 import io.nekohasekai.sfa.latency.NetworkIdentityProvider
 import io.nekohasekai.sfa.latency.NodeLatencyResult
 import io.nekohasekai.sfa.latency.OfflineLatencyProbe
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeState
+import io.nekohasekai.sfa.repository.MihomoProxyGroupRepository
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
 import io.nekohasekai.sfa.utils.CommandClient
 import io.nekohasekai.sfa.utils.CommandTarget
@@ -68,10 +75,17 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
     private val _serviceStatus = MutableStateFlow(Status.Stopped)
     val serviceStatus = _serviceStatus.asStateFlow()
     private var lastServiceStatus: Status = Status.Stopped
+    private val _profileRevision = MutableStateFlow(0L)
+
+    @Volatile
+    private var isUsingMihomo = false
 
     private val profileCallback: () -> Unit = {
-        if (RemoteControlManager.remoteServer.value == null && _serviceStatus.value != Status.Started) {
-            viewModelScope.launch { refreshOfflineGroups() }
+        viewModelScope.launch {
+            _profileRevision.emit(_profileRevision.value + 1)
+            if (RemoteControlManager.remoteServer.value == null && _serviceStatus.value != Status.Started) {
+                refreshOfflineGroups()
+            }
         }
     }
 
@@ -79,7 +93,6 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
         if (sharedCommandClient != null) {
             commandClient = sharedCommandClient
             isUsingSharedClient = true
-            commandClient.addHandler(this)
         } else {
             commandClient =
                 CommandClient(
@@ -99,14 +112,28 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
                 RemoteControlManager.remoteServer,
                 RemoteControlManager.isConnected,
                 _serviceStatus,
-            ) { foreground, remoteServer, remoteConnected, status ->
+                _profileRevision,
+            ) { foreground, remoteServer, remoteConnected, status, _ ->
                 SessionTarget(
                     connect = foreground &&
                         if (remoteServer != null) remoteConnected else status == Status.Started,
                     remoteServerId = remoteServer?.id,
+                    profileId = Settings.selectedProfile,
                 )
             }.distinctUntilChanged().collect { target ->
-                if (target.connect) {
+                val useMihomo = target.connect && withContext(Dispatchers.IO) {
+                    selectedMihomoProfileId() != null
+                }
+                if (useMihomo) {
+                    isUsingMihomo = true
+                    if (isUsingSharedClient) {
+                        commandClient.removeHandler(this@GroupsViewModel)
+                    } else {
+                        commandClient.disconnect()
+                    }
+                    refreshMihomoGroups()
+                } else if (target.connect) {
+                    isUsingMihomo = false
                     if (isUsingSharedClient) {
                         commandClient.addHandler(this@GroupsViewModel)
                     } else {
@@ -114,6 +141,7 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
                         commandClient.connect()
                     }
                 } else {
+                    isUsingMihomo = false
                     if (isUsingSharedClient) {
                         commandClient.removeHandler(this@GroupsViewModel)
                     } else {
@@ -150,7 +178,11 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
         viewModelScope.launch { refreshOfflineGroups() }
     }
 
-    private data class SessionTarget(val connect: Boolean, val remoteServerId: Long?)
+    private data class SessionTarget(
+        val connect: Boolean,
+        val remoteServerId: Long?,
+        val profileId: Long,
+    )
 
     override fun createInitialState() = GroupsUiState()
 
@@ -208,6 +240,67 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
         }
     }
 
+    private suspend fun selectedMihomoProfileId(): Long? {
+        if (RemoteControlManager.remoteServer.value != null || _serviceStatus.value != Status.Started) return null
+        val profileId = Settings.selectedProfile
+        if (profileId == -1L) return null
+        return profileId.takeIf { ProfileManager.get(it)?.typed?.core == ProfileCore.Mihomo }
+    }
+
+    /**
+     * Mihomo owns runtime group selections through its loopback controller.
+     * This deliberately does not parse or rewrite the YAML profile.
+     */
+    private suspend fun refreshMihomoGroups() {
+        val profileId = selectedMihomoProfileId() ?: return
+        val controller = MihomoRuntimeRepository.controller(Application.application)
+        if (controller.runtimeState.value != MihomoRuntimeState.Running) {
+            withContext(Dispatchers.Main) {
+                if (isUsingMihomo && Settings.selectedProfile == profileId) {
+                    updateState { copy(groups = emptyList(), isLoading = false) }
+                }
+            }
+            return
+        }
+
+        val currentByTag = uiState.value.groups.associateBy { it.tag }
+        val groups = try {
+            MihomoProxyGroupRepository(controller)
+                .getGroups()
+                .map { it.toGroup(currentByTag[it.name]) }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                if (isUsingMihomo && Settings.selectedProfile == profileId) {
+                    updateState { copy(isLoading = false) }
+                    sendError(e)
+                }
+            }
+            return
+        }
+        if (selectedMihomoProfileId() != profileId) return
+        LatencyRepository.prune(
+            profileId,
+            groups.associate { group -> group.tag to group.items.map { it.tag }.toSet() },
+        )
+        withContext(Dispatchers.Main) {
+            if (!isUsingMihomo || Settings.selectedProfile != profileId) return@withContext
+            updateState {
+                val initialExpandedGroups = if (expandedGroups.isEmpty() && groups.isNotEmpty()) {
+                    groups.filter { it.selectable }.map { it.tag }.toSet()
+                } else {
+                    expandedGroups
+                }
+                copy(
+                    groups = overlayGroups(groups, currentNetworkKey()),
+                    expandedGroups = initialExpandedGroups,
+                    isLoading = false,
+                )
+            }
+        }
+    }
+
+    private fun mihomoRepository(): MihomoProxyGroupRepository = MihomoProxyGroupRepository(MihomoRuntimeRepository.controller(Application.application))
+
     private suspend fun loadOfflineGroups(profileId: Long): List<Group> {
         val profile = ProfileManager.get(profileId)
         val profileFile = profile?.typed?.path?.let(::File)
@@ -247,6 +340,7 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
             val newExpandedGroups = if (newExpanded) expandedGroups + groupTag else expandedGroups - groupTag
             copy(expandedGroups = newExpandedGroups)
         }
+        if (isUsingMihomo) return
         if (_serviceStatus.value != Status.Started && RemoteControlManager.remoteServer.value == null) return
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { CommandTarget.standaloneClient().setGroupExpand(groupTag, newExpanded) }
@@ -263,6 +357,7 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
                 copy(expandedGroups = emptySet())
             }
         }
+        if (isUsingMihomo) return
         if (_serviceStatus.value != Status.Started && RemoteControlManager.remoteServer.value == null) return
         viewModelScope.launch(Dispatchers.IO) {
             groups.forEach { group ->
@@ -277,21 +372,29 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val useMihomo = isUsingMihomo
                 val localStopped =
                     _serviceStatus.value != Status.Started && RemoteControlManager.remoteServer.value == null
-                if (!localStopped) {
+                if (useMihomo) {
+                    mihomoRepository().select(groupTag, itemTag)
+                    refreshMihomoGroups()
+                } else if (!localStopped) {
                     val client = CommandTarget.standaloneClient()
                     client.selectOutbound(groupTag, itemTag)
                     runCatching { client.closeConnections() }
                 }
-                persistLocalSelection(groupTag, itemTag)
+                if (!useMihomo) {
+                    persistLocalSelection(groupTag, itemTag)
+                }
                 withContext(Dispatchers.Main) {
-                    updateState {
-                        copy(
-                            groups = groups.map { group ->
-                                if (group.tag == groupTag) group.copy(selected = itemTag) else group
-                            },
-                        )
+                    if (!useMihomo) {
+                        updateState {
+                            copy(
+                                groups = groups.map { group ->
+                                    if (group.tag == groupTag) group.copy(selected = itemTag) else group
+                                },
+                            )
+                        }
                     }
                     sendEvent(GroupsEvent.GroupSelected(groupTag, itemTag))
                 }
@@ -337,17 +440,20 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
         if (targets.isEmpty()) return
 
         updateState { copy(testingGroups = testingGroups + groupTag) }
-        val probeFactory = when (source) {
-            io.nekohasekai.sfa.latency.LatencyResultSource.LIVE_CORE -> LatencyProbeFactory {
-                LiveCoreLatencyProbe(
-                    updates = liveGroupUpdates,
-                    currentSequence = liveSequence::get,
-                )
-            }
-            io.nekohasekai.sfa.latency.LatencyResultSource.OFFLINE_PROBE -> LatencyProbeFactory {
-                val profile = ProfileManager.get(profileId) ?: error("profile not found")
-                val content = File(profile.typed.path).readText()
-                OfflineLatencyProbe(content).also { it.start() }
+        val probeFactory = when {
+            isUsingMihomo -> LatencyProbeFactory { MihomoLatencyProbe(mihomoRepository()) }
+            else -> when (source) {
+                io.nekohasekai.sfa.latency.LatencyResultSource.LIVE_CORE -> LatencyProbeFactory {
+                    LiveCoreLatencyProbe(
+                        updates = liveGroupUpdates,
+                        currentSequence = liveSequence::get,
+                    )
+                }
+                io.nekohasekai.sfa.latency.LatencyResultSource.OFFLINE_PROBE -> LatencyProbeFactory {
+                    val profile = ProfileManager.get(profileId) ?: error("profile not found")
+                    val content = File(profile.typed.path).readText()
+                    OfflineLatencyProbe(content).also { it.start() }
+                }
             }
         }
         val job = latencyCoordinator.start(viewModelScope, targets, probeFactory) { result ->
@@ -414,13 +520,14 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
 
     override fun onDisconnected() {
         viewModelScope.launch(Dispatchers.Main) {
-            if (_serviceStatus.value == Status.Started || RemoteControlManager.remoteServer.value != null) {
+            if (!isUsingMihomo && (_serviceStatus.value == Status.Started || RemoteControlManager.remoteServer.value != null)) {
                 updateState { copy(groups = emptyList(), isLoading = false, testingGroups = emptySet(), testingNodes = emptySet()) }
             }
         }
     }
 
     override fun updateGroups(newGroups: MutableList<OutboundGroup>) {
+        if (isUsingMihomo) return
         viewModelScope.launch(Dispatchers.Default) {
             val currentGroups = uiState.value.groups
             val currentByTag = currentGroups.associateBy { it.tag }

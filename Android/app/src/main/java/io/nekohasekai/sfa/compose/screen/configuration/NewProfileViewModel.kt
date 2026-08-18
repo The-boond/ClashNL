@@ -9,9 +9,10 @@ import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.config.ClashConfigNormalizer
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
-import io.nekohasekai.sfa.repository.RemoteProfileRepository
+import io.nekohasekai.sfa.repository.ProfileRemoteRepository
 import io.nekohasekai.sfa.repository.RemoteProfileUrlPolicy
 import io.nekohasekai.sfa.utils.HTTPClient
 import io.nekohasekai.sfa.utils.ProfileConfigStore
@@ -32,6 +33,7 @@ data class NewProfileUiState(
     val profileSource: ProfileSource = ProfileSource.CreateNew,
     // Remote profile fields
     val remoteUrl: String = "",
+    val remoteCore: ProfileCore = ProfileCore.SingBox,
     val autoUpdate: Boolean = true,
     val autoUpdateInterval: Int = 60,
     // File import
@@ -131,6 +133,10 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
                 remoteUrlError = if (url.isNotBlank()) null else it.remoteUrlError,
             )
         }
+    }
+
+    fun updateRemoteCore(core: ProfileCore) {
+        _uiState.update { it.copy(remoteCore = core) }
     }
 
     fun updateAutoUpdate(enabled: Boolean) {
@@ -320,6 +326,7 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
         val typedProfile =
             TypedProfile().apply {
                 type = TypedProfile.Type.Remote
+                core = state.remoteCore
                 remoteURL = remoteUrl
                 autoUpdate = state.autoUpdate
                 autoUpdateInterval = state.autoUpdateInterval
@@ -333,11 +340,12 @@ class NewProfileViewModel(application: Application) : AndroidViewModel(applicati
 
         val fileID = ProfileManager.nextFileID()
         val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
-        val configFile = File(configDirectory, "$fileID.json")
+        val extension = if (typedProfile.core == ProfileCore.Mihomo) "yaml" else "json"
+        val configFile = File(configDirectory, "$fileID.$extension")
         typedProfile.path = configFile.path
 
         // Fetch initial config - this MUST succeed for remote profiles
-        val fetched = RemoteProfileRepository.fetchNormalized(remoteUrl)
+        val fetched = ProfileRemoteRepository.fetch(typedProfile.core, remoteUrl)
         fetched.metadata?.replaceOn(typedProfile)
         ProfileConfigStore.write(configFile, fetched.content)
 

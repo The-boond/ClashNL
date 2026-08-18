@@ -35,6 +35,7 @@ class TypedProfile() : Parcelable {
 
     var path = ""
     var type = Type.Local
+    var core = ProfileCore.SingBox
     var remoteURL: String = ""
     var lastUpdated: Date = Date(0)
     var autoUpdate: Boolean = false
@@ -64,10 +65,13 @@ class TypedProfile() : Parcelable {
             subscriptionUpdateIntervalMinutes = reader.readInt()
             subscriptionWebPageURL = reader.readString() ?: ""
         }
+        if (version >= 3) {
+            core = ProfileCore.fromOrdinal(reader.readInt())
+        }
     }
 
     override fun writeToParcel(writer: Parcel, flags: Int) {
-        writer.writeInt(2)
+        writer.writeInt(3)
         writer.writeString(path)
         writer.writeInt(type.ordinal)
         writer.writeString(remoteURL)
@@ -80,6 +84,7 @@ class TypedProfile() : Parcelable {
         writer.writeLong(subscriptionExpireAt)
         writer.writeInt(subscriptionUpdateIntervalMinutes)
         writer.writeString(subscriptionWebPageURL)
+        writer.writeInt(core.ordinal)
     }
 
     override fun describeContents(): Int = 0

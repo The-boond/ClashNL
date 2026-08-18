@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import io.nekohasekai.sfa.database.Settings
+import io.nekohasekai.sfa.runtime.ProfileRuntime
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
@@ -27,7 +28,7 @@ class BootReceiver : BroadcastReceiver() {
                     return@launch
                 }
                 withContext(Dispatchers.Main) {
-                    BoxService.start()
+                    ProfileRuntime.startSelected(context)
                 }
             }
         }
