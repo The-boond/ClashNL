@@ -24,35 +24,42 @@ class Profile(
     var typed: TypedProfile = TypedProfile(),
 ) : Parcelable {
     @androidx.room.Dao
+    @TypeConverters(TypedProfile.Convertor::class)
     interface Dao {
         @Insert
-        fun insert(profile: Profile): Long
+        suspend fun insert(profile: Profile): Long
 
         @Update
-        fun update(profile: Profile): Int
+        suspend fun update(profile: Profile): Int
 
         @Update
-        fun update(profile: List<Profile>): Int
+        suspend fun update(profile: List<Profile>): Int
+
+        @Query("UPDATE profiles SET typed = :typed WHERE id = :profileId")
+        suspend fun updateTyped(profileId: Long, typed: TypedProfile): Int
+
+        @Query("UPDATE profiles SET name = :name, icon = :icon, typed = :typed WHERE id = :profileId")
+        suspend fun updateEditable(profileId: Long, name: String, icon: String?, typed: TypedProfile): Int
 
         @Delete
-        fun delete(profile: Profile): Int
+        suspend fun delete(profile: Profile): Int
 
         @Delete
-        fun delete(profile: List<Profile>): Int
+        suspend fun delete(profile: List<Profile>): Int
 
         @Query("SELECT * FROM profiles WHERE id = :profileId")
-        fun get(profileId: Long): Profile?
+        suspend fun get(profileId: Long): Profile?
 
         @Query("select * from profiles order by userOrder asc")
-        fun list(): List<Profile>
+        suspend fun list(): List<Profile>
 
         @Query("DELETE FROM profiles")
-        fun clear()
+        suspend fun clear()
 
         @Query("SELECT MAX(userOrder) + 1 FROM profiles")
-        fun nextOrder(): Long?
+        suspend fun nextOrder(): Long?
 
         @Query("SELECT MAX(id) + 1 FROM profiles")
-        fun nextFileID(): Long?
+        suspend fun nextFileID(): Long?
     }
 }

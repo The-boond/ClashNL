@@ -10,7 +10,7 @@ import kotlinx.serialization.json.jsonObject
 /**
  * Keeps subscription node endpoint resolution on IPv4.
  *
- * The account/subscription download transport has its own IPv4-only policy.
+ * The subscription download transport has its own IPv4-only policy.
  * This policy applies to the imported sing-box runtime profile, so proxy server
  * hostnames do not reconnect through an AAAA result on unstable dual-stack
  * mobile networks.

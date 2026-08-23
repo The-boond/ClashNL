@@ -55,12 +55,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.ktx.clipboardText
 import io.nekohasekai.sfa.utils.CoreVersion
+import io.nekohasekai.sfa.utils.formatBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -98,7 +98,7 @@ fun CoreSettingsScreen(navController: NavController) {
                     .filter { it.isFile }
                     .map { it.length() }
                     .sum()
-            val formattedSize = Libbox.formatBytes(size)
+            val formattedSize = formatBytes(size)
             dataSize = formattedSize
         }
     }
@@ -355,7 +355,7 @@ fun CoreSettingsScreen(navController: NavController) {
                                     .filter { it.isFile }
                                     .map { it.length() }
                                     .sum()
-                            val formattedSize = Libbox.formatBytes(newSize)
+                            val formattedSize = formatBytes(newSize)
                             dataSize = formattedSize
                         }
                     },

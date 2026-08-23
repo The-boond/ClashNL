@@ -4,10 +4,7 @@ import android.os.Build
 import androidx.room.Room
 import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.BuildConfig
-import io.nekohasekai.sfa.bg.ProxyService
-import io.nekohasekai.sfa.bg.VPNService
 import io.nekohasekai.sfa.constant.Path
-import io.nekohasekai.sfa.constant.ServiceMode
 import io.nekohasekai.sfa.constant.SettingsKey
 import io.nekohasekai.sfa.database.preference.KeyValueDatabase
 import io.nekohasekai.sfa.database.preference.RoomPreferenceDataStore
@@ -17,11 +14,10 @@ import io.nekohasekai.sfa.ktx.long
 import io.nekohasekai.sfa.ktx.map
 import io.nekohasekai.sfa.ktx.string
 import io.nekohasekai.sfa.ktx.stringSet
+import io.nekohasekai.sfa.mihomo.MihomoNetworkMode
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import org.json.JSONObject
-import java.io.File
 
 object Settings {
     @OptIn(DelicateCoroutinesApi::class)
@@ -39,7 +35,6 @@ object Settings {
     }
     val dataStore = RoomPreferenceDataStore(instance.keyValuePairDao())
     var selectedProfile by dataStore.long(SettingsKey.SELECTED_PROFILE) { -1L }
-    var serviceMode by dataStore.string(SettingsKey.SERVICE_MODE) { ServiceMode.NORMAL }
     var startedByUser by dataStore.boolean(SettingsKey.STARTED_BY_USER)
     var activeProfileCore by dataStore.string(SettingsKey.ACTIVE_PROFILE_CORE) { "" }
 
@@ -102,6 +97,10 @@ object Settings {
 
     var allowBypass by dataStore.boolean(SettingsKey.ALLOW_BYPASS) { false }
     var systemProxyEnabled by dataStore.boolean(SettingsKey.SYSTEM_PROXY_ENABLED) { true }
+    var mihomoNetworkMode by dataStore.string(SettingsKey.MIHOMO_NETWORK_MODE) {
+        MihomoNetworkMode.VirtualNic.storageValue
+    }
+    var mihomoClashMode by dataStore.string(SettingsKey.MIHOMO_CLASH_MODE) { "rule" }
 
     var privilegeSettingsEnabled by dataStore.boolean(SettingsKey.PRIVILEGE_SETTINGS_ENABLED) { false }
     var privilegeSettingsList by dataStore.stringSet(SettingsKey.PRIVILEGE_SETTINGS_LIST) { emptySet() }
@@ -131,39 +130,4 @@ object Settings {
     var cachedUpdateInfo by dataStore.string(SettingsKey.CACHED_UPDATE_INFO) { "" }
     var cachedApkPath by dataStore.string(SettingsKey.CACHED_APK_PATH) { "" }
     var lastShownUpdateVersion by dataStore.int(SettingsKey.LAST_SHOWN_UPDATE_VERSION) { 0 }
-
-    fun serviceClass(): Class<*> = when (serviceMode) {
-        ServiceMode.VPN -> VPNService::class.java
-        else -> ProxyService::class.java
-    }
-
-    suspend fun rebuildServiceMode(): Boolean {
-        var newMode = ServiceMode.NORMAL
-        try {
-            if (needVPNService()) {
-                newMode = ServiceMode.VPN
-            }
-        } catch (_: Exception) {
-        }
-        if (serviceMode == newMode) {
-            return false
-        }
-        serviceMode = newMode
-        return true
-    }
-
-    private suspend fun needVPNService(): Boolean {
-        val selectedProfileId = selectedProfile
-        if (selectedProfileId == -1L) return false
-        val profile = ProfileManager.get(selectedProfile) ?: return false
-        val content = JSONObject(File(profile.typed.path).readText())
-        val inbounds = content.getJSONArray("inbounds")
-        for (index in 0 until inbounds.length()) {
-            val inbound = inbounds.getJSONObject(index)
-            if (inbound.getString("type") == "tun") {
-                return true
-            }
-        }
-        return false
-    }
 }

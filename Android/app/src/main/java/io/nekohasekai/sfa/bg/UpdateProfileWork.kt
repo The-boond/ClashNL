@@ -11,6 +11,8 @@ import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import io.nekohasekai.sfa.Application
+import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
@@ -34,18 +36,23 @@ class UpdateProfileWork {
         private suspend fun reconfigureUpdater0() {
             val remoteProfiles =
                 ProfileManager.list()
-                    .filter { it.typed.type == TypedProfile.Type.Remote && it.typed.autoUpdate }
+                    .filter(ProfileUpdateSchedule::isEligible)
             if (remoteProfiles.isEmpty()) {
                 WorkManager.getInstance(Application.application).cancelUniqueWork(WORK_NAME)
                 return
             }
 
-            var minDelay =
-                remoteProfiles.minByOrNull { it.typed.autoUpdateInterval }!!.typed.autoUpdateInterval.toLong()
-            val nowSeconds = System.currentTimeMillis() / 1000L
+            val minDelay =
+                remoteProfiles.minOf { ProfileUpdateSchedule.intervalMinutes(it.typed.autoUpdateInterval) }
+            val nowMillis = System.currentTimeMillis()
             val minInitDelay =
-                remoteProfiles.minOf { (it.typed.autoUpdateInterval * 60) - (nowSeconds - (it.typed.lastUpdated.time / 1000L)) }
-            if (minDelay < 15) minDelay = 15
+                remoteProfiles.minOf {
+                    ProfileUpdateSchedule.remainingDelaySeconds(
+                        intervalMinutes = it.typed.autoUpdateInterval,
+                        lastUpdatedMillis = it.typed.lastUpdated.time,
+                        nowMillis = nowMillis,
+                    )
+                }
             WorkManager.getInstance(Application.application).enqueueUniquePeriodicWork(
                 WORK_NAME,
                 ExistingPeriodicWorkPolicy.UPDATE,
@@ -70,14 +77,18 @@ class UpdateProfileWork {
             var selectedProfileUpdated = false
             val remoteProfiles =
                 ProfileManager.list()
-                    .filter { it.typed.type == TypedProfile.Type.Remote && it.typed.autoUpdate }
+                    .filter(ProfileUpdateSchedule::isEligible)
             if (remoteProfiles.isEmpty()) return Result.success()
             var success = true
             val selectedProfile = Settings.selectedProfile
             for (profile in remoteProfiles) {
-                val lastSeconds =
-                    (System.currentTimeMillis() - profile.typed.lastUpdated.time) / 1000L
-                if (lastSeconds < profile.typed.autoUpdateInterval * 60) {
+                if (
+                    !ProfileUpdateSchedule.isDue(
+                        intervalMinutes = profile.typed.autoUpdateInterval,
+                        lastUpdatedMillis = profile.typed.lastUpdated.time,
+                        nowMillis = System.currentTimeMillis(),
+                    )
+                ) {
                     continue
                 }
                 try {
@@ -102,4 +113,37 @@ class UpdateProfileWork {
             }
         }
     }
+}
+
+internal object ProfileUpdateSchedule {
+    private const val MIN_INTERVAL_MINUTES = 15L
+
+    fun isEligible(profile: Profile): Boolean = profile.typed.type == TypedProfile.Type.Remote &&
+        profile.typed.core == ProfileCore.Mihomo &&
+        profile.typed.autoUpdate
+
+    fun intervalMinutes(value: Int): Long = value.toLong().coerceAtLeast(MIN_INTERVAL_MINUTES)
+
+    fun remainingDelaySeconds(
+        intervalMinutes: Int,
+        lastUpdatedMillis: Long,
+        nowMillis: Long,
+    ): Long {
+        val intervalSeconds = intervalMinutes(intervalMinutes) * 60L
+        val nowSeconds = nowMillis / 1_000L
+        val lastUpdatedSeconds = lastUpdatedMillis / 1_000L
+        val elapsedSeconds =
+            if (nowSeconds > lastUpdatedSeconds) {
+                nowSeconds - lastUpdatedSeconds
+            } else {
+                0L
+            }
+        return (intervalSeconds - elapsedSeconds).coerceAtLeast(0L)
+    }
+
+    fun isDue(
+        intervalMinutes: Int,
+        lastUpdatedMillis: Long,
+        nowMillis: Long,
+    ): Boolean = remainingDelaySeconds(intervalMinutes, lastUpdatedMillis, nowMillis) == 0L
 }

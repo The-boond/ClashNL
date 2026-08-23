@@ -8,11 +8,13 @@ package main
 import "C"
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/netip"
+	"os"
 	"runtime"
 	"strings"
 	"sync"
@@ -23,21 +25,26 @@ import (
 	"github.com/metacubex/mihomo/component/process"
 	"github.com/metacubex/mihomo/config"
 	MC "github.com/metacubex/mihomo/constant"
+	"github.com/metacubex/mihomo/hub"
+	"github.com/metacubex/mihomo/hub/executor"
 	LC "github.com/metacubex/mihomo/listener/config"
 	"github.com/metacubex/mihomo/listener/sing_tun"
 	"github.com/metacubex/mihomo/log"
 	"github.com/metacubex/mihomo/tunnel"
-	"github.com/metacubex/mihomo/hub"
 )
 
 var tunLock sync.Mutex
 var activeTun *remoteTun
+var coreLock sync.Mutex
+var controllerInitialized bool
+var controllerAddress string
+var controllerSecret string
 
 type remoteTun struct {
-	closer io.Closer
+	closer   io.Closer
 	callback unsafe.Pointer
-	mutex sync.RWMutex
-	closed bool
+	mutex    sync.RWMutex
+	closed   bool
 }
 
 func main() {}
@@ -47,11 +54,13 @@ func coreInit(home *C.char, sdkVersion C.int) {
 	MC.SetHomeDir(C.GoString(home))
 	_ = sdkVersion
 	dialer.DefaultSocketHook = func(_ string, _ string, conn syscall.RawConn) error {
-		return conn.Control(func(fd uintptr) {
-			if current := currentTun(); current != nil {
-				current.protectSocket(int(fd))
+		var protectErr error
+		controlErr := conn.Control(func(fd uintptr) {
+			if current := currentTun(); current != nil && !current.protectSocket(int(fd)) {
+				protectErr = errors.New("android: unable to protect Mihomo socket from VPN")
 			}
 		})
+		return errors.Join(controlErr, protectErr)
 	}
 	process.DefaultPackageNameResolver = func(metadata *MC.Metadata) (string, error) {
 		if metadata.RawSrcAddr == nil || metadata.RawDstAddr == nil {
@@ -78,7 +87,7 @@ func currentTun() *remoteTun {
 	return activeTun
 }
 
-func parseConfig(content, controller, secret string) (*config.Config, error) {
+func decodeProfile(content string) (*config.RawConfig, error) {
 	raw, err := config.UnmarshalRawConfig([]byte(content))
 	if err != nil {
 		return nil, err
@@ -86,15 +95,76 @@ func parseConfig(content, controller, secret string) (*config.Config, error) {
 	if len(raw.Proxy) == 0 && len(raw.ProxyProvider) == 0 {
 		return nil, errors.New("profile does not contain proxies or proxy-providers")
 	}
+	knownNames := make(map[string]struct{}, len(raw.Proxy)+len(raw.ProxyGroup))
+	for index, mapping := range raw.Proxy {
+		name, _ := mapping["name"].(string)
+		proxyType, _ := mapping["type"].(string)
+		if name == "" || proxyType == "" {
+			return nil, fmt.Errorf("proxy %d must contain non-empty name and type", index)
+		}
+		if _, exists := knownNames[name]; exists {
+			return nil, fmt.Errorf("duplicate proxy or group name: %s", name)
+		}
+		knownNames[name] = struct{}{}
+	}
+	for index, mapping := range raw.ProxyGroup {
+		name, _ := mapping["name"].(string)
+		groupType, _ := mapping["type"].(string)
+		if name == "" || groupType == "" {
+			return nil, fmt.Errorf("proxy group %d must contain non-empty name and type", index)
+		}
+		if _, exists := knownNames[name]; exists {
+			return nil, fmt.Errorf("duplicate proxy or group name: %s", name)
+		}
+		knownNames[name] = struct{}{}
+	}
+	return raw, nil
+}
+
+func parseConfig(content, controller, secret string, httpProxyPort int) (*config.Config, error) {
+	raw, err := decodeProfile(content)
+	if err != nil {
+		return nil, err
+	}
 	raw.ExternalController = controller
 	raw.ExternalControllerTLS = ""
 	raw.ExternalControllerUnix = ""
 	raw.ExternalControllerPipe = ""
 	raw.Secret = secret
+	// The Android app owns the only inbound (VpnService TUN). Subscription
+	// content must not be able to expose proxy, DNS, or server listeners.
+	if httpProxyPort < 0 || httpProxyPort > 65535 {
+		return nil, fmt.Errorf("invalid app-owned HTTP proxy port: %d", httpProxyPort)
+	}
+	raw.Port = httpProxyPort
+	raw.SocksPort = 0
+	raw.RedirPort = 0
+	raw.TProxyPort = 0
+	raw.MixedPort = 0
+	raw.ShadowSocksConfig = ""
+	raw.VmessConfig = ""
+	raw.AllowLan = false
+	raw.BindAddress = "127.0.0.1"
+	raw.Authentication = nil
+	raw.SkipAuthPrefixes = nil
+	raw.Listeners = nil
+	raw.Tunnels = nil
+	raw.TuicServer = config.RawTuicServer{}
+	raw.IPTables = config.RawIPTables{}
+	raw.DNS.Listen = ""
+	raw.NTP.WriteToSystem = false
+	raw.ExternalUI = ""
+	raw.ExternalUIURL = ""
+	raw.ExternalUIName = ""
+	raw.ExternalDohServer = ""
+	raw.ExternalControllerCors = config.RawCors{}
 	raw.Tun.Enable = false
 	raw.Tun.AutoRoute = false
 	raw.Tun.AutoDetectInterface = false
-	raw.Profile.StoreSelected = true
+	// Selections are persisted per app profile by Kotlin. Mihomo's global cache
+	// is shared by every subscription and would leak choices between equal group
+	// names such as "PROXY".
+	raw.Profile.StoreSelected = false
 	raw.Profile.StoreFakeIP = true
 	return config.ParseRawConfig(raw)
 }
@@ -108,40 +178,153 @@ func errorString(err error) *C.char {
 
 //export validateConfig
 func validateConfig(content, controller, secret *C.char) *C.char {
-	_, err := parseConfig(C.GoString(content), C.GoString(controller), C.GoString(secret))
+	// Import and edit validation must be deterministic and offline. Full Mihomo
+	// parsing can initialize geodata and other remote-backed resources; that
+	// happens once when the core is actually loaded instead of freezing the UI.
+	_, err := decodeProfile(C.GoString(content))
+	_ = controller
+	_ = secret
 	return errorString(err)
 }
 
+type offlineProxyGroup struct {
+	Name     string   `json:"name"`
+	Type     string   `json:"type"`
+	Selected string   `json:"selected"`
+	Proxies  []string `json:"proxies"`
+}
+
+type offlineProxyGroupResponse struct {
+	Error  string              `json:"error,omitempty"`
+	Groups []offlineProxyGroup `json:"groups"`
+}
+
+//export describeProxyGroups
+func describeProxyGroups(content *C.char) *C.char {
+	raw, err := config.UnmarshalRawConfig([]byte(C.GoString(content)))
+	response := offlineProxyGroupResponse{Groups: make([]offlineProxyGroup, 0)}
+	if err != nil {
+		response.Error = err.Error()
+	} else {
+		for _, mapping := range raw.ProxyGroup {
+			name, _ := mapping["name"].(string)
+			groupType, _ := mapping["type"].(string)
+			proxies := stringValues(mapping["proxies"])
+			if name == "" || len(proxies) == 0 {
+				continue
+			}
+			response.Groups = append(response.Groups, offlineProxyGroup{
+				Name:     name,
+				Type:     groupType,
+				Selected: proxies[0],
+				Proxies:  proxies,
+			})
+		}
+	}
+	encoded, marshalErr := json.Marshal(response)
+	if marshalErr != nil {
+		return C.CString(`{"error":"Unable to encode Mihomo proxy groups","groups":[]}`)
+	}
+	return C.CString(string(encoded))
+}
+
+func stringValues(value any) []string {
+	values, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		if stringValue, ok := value.(string); ok && stringValue != "" {
+			result = append(result, stringValue)
+		}
+	}
+	return result
+}
+
 //export loadConfig
-func loadConfig(content, controller, secret *C.char) *C.char {
-	cfg, err := parseConfig(C.GoString(content), C.GoString(controller), C.GoString(secret))
+func loadConfig(content, controller, secret *C.char, httpProxyPort C.int) *C.char {
+	coreLock.Lock()
+	defer coreLock.Unlock()
+	requestedAddress := C.GoString(controller)
+	requestedSecret := C.GoString(secret)
+	if controllerInitialized && (requestedAddress != controllerAddress || requestedSecret != controllerSecret) {
+		return errorString(errors.New("Mihomo controller endpoint cannot change before process restart"))
+	}
+	cfg, err := parseConfig(C.GoString(content), requestedAddress, requestedSecret, int(httpProxyPort))
 	if err == nil {
-		hub.ApplyConfig(cfg)
+		if controllerInitialized {
+			// Keep the authenticated loopback controller alive for this process.
+			// Applying only the runtime config makes reload and restart synchronous
+			// and avoids Mihomo's asynchronous controller replacement race.
+			executor.ApplyConfig(cfg, true)
+		} else {
+			hub.ApplyConfig(cfg)
+			controllerAddress = requestedAddress
+			controllerSecret = requestedSecret
+			controllerInitialized = true
+		}
 	}
 	return errorString(err)
 }
 
-//export startTun
-func startTun(fd C.int, stack, gateway, dns *C.char, callback unsafe.Pointer) *C.char {
+//export setMode
+func setMode(mode *C.char) *C.char {
+	value := strings.ToLower(strings.TrimSpace(C.GoString(mode)))
+	parsed, exists := tunnel.ModeMapping[value]
+	if !exists {
+		return errorString(fmt.Errorf("unsupported Mihomo mode: %s", value))
+	}
+	tunnel.SetMode(parsed)
+	return nil
+}
+
+//export prepareTun
+func prepareTun(callback unsafe.Pointer) {
 	tunLock.Lock()
 	defer tunLock.Unlock()
 	if activeTun != nil {
 		activeTun.close()
-		activeTun = nil
+	}
+	activeTun = &remoteTun{callback: callback}
+}
+
+// The fd is owned by this function on entry. A successful listener closes it;
+// every failure path closes it before returning.
+//
+//export startTun
+func startTun(fd C.int, stack, gateway, dns *C.char) *C.char {
+	tunLock.Lock()
+	defer tunLock.Unlock()
+	if activeTun == nil {
+		closeOwnedFD(int(fd))
+		return errorString(errors.New("android: TUN callback was not prepared"))
+	}
+	if activeTun.closer != nil {
+		closeOwnedFD(int(fd))
+		return errorString(errors.New("android: TUN is already active"))
 	}
 
 	options, err := makeTunOptions(int(fd), C.GoString(stack), C.GoString(gateway), C.GoString(dns))
 	if err != nil {
-		C.release_callback(callback)
+		closeOwnedFD(int(fd))
 		return errorString(err)
 	}
 	listener, err := sing_tun.New(options, tunnel.Tunnel)
 	if err != nil {
-		C.release_callback(callback)
+		// sing-tun may already have created and closed its native TUN before
+		// returning an error. Closing the raw integer again can hit a reused fd,
+		// so ownership remains with sing-tun once New has been entered.
 		return errorString(err)
 	}
-	activeTun = &remoteTun{closer: listener, callback: callback}
+	activeTun.closer = listener
 	return nil
+}
+
+func closeOwnedFD(fd int) {
+	if file := os.NewFile(uintptr(fd), "android-tun"); file != nil {
+		_ = file.Close()
+	}
 }
 
 func makeTunOptions(fd int, stack, gateway, dns string) (LC.Tun, error) {
@@ -174,16 +357,16 @@ func makeTunOptions(fd int, stack, gateway, dns string) (LC.Tun, error) {
 		}
 	}
 	return LC.Tun{
-		Enable: true,
-		Device: sing_tun.InterfaceName,
-		Stack: tunStack,
-		DNSHijack: dnsHijack,
-		AutoRoute: false,
+		Enable:              true,
+		Device:              sing_tun.InterfaceName,
+		Stack:               tunStack,
+		DNSHijack:           dnsHijack,
+		AutoRoute:           false,
 		AutoDetectInterface: false,
-		Inet4Address: prefix4,
-		Inet6Address: prefix6,
-		MTU: 9000,
-		FileDescriptor: fd,
+		Inet4Address:        prefix4,
+		Inet6Address:        prefix6,
+		MTU:                 9000,
+		FileDescriptor:      fd,
 	}, nil
 }
 
@@ -243,9 +426,14 @@ func stopTun() {
 
 //export stopCore
 func stopCore() {
+	coreLock.Lock()
+	defer coreLock.Unlock()
 	stopTun()
 	if cfg, err := config.Parse([]byte{}); err == nil {
-		hub.ApplyConfig(cfg)
+		// The controller remains bound to its random, authenticated loopback
+		// endpoint until process exit. Keeping it stable lets future starts use
+		// executor.ApplyConfig synchronously without replacing the HTTP server.
+		executor.ApplyConfig(cfg, true)
 	}
 	runtime.GC()
 }

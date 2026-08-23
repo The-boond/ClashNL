@@ -2,7 +2,6 @@ package io.nekohasekai.sfa.constant
 
 object SettingsKey {
     const val SELECTED_PROFILE = "selected_profile"
-    const val SERVICE_MODE = "service_mode"
     const val CHECK_UPDATE_ENABLED = "check_update_enabled"
     const val UPDATE_CHECK_PROMPTED = "update_check_prompted"
     const val UPDATE_SOURCE = "update_source"
@@ -27,6 +26,8 @@ object SettingsKey {
 
     const val ALLOW_BYPASS = "allow_bypass"
     const val SYSTEM_PROXY_ENABLED = "system_proxy_enabled"
+    const val MIHOMO_NETWORK_MODE = "mihomo_network_mode"
+    const val MIHOMO_CLASH_MODE = "mihomo_clash_mode"
 
     const val PRIVILEGE_SETTINGS_ENABLED = "hide_settings_enabled"
     const val PRIVILEGE_SETTINGS_LIST = "hide_settings_list"

@@ -42,11 +42,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.model.GroupItem
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.utils.CommandClient
+import io.nekohasekai.sfa.utils.proxyDisplayType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -161,7 +161,7 @@ fun OutboundPickerScreen(
             items(filteredOutbounds, key = { it.tag }) { item ->
                 OutboundPickerItem(
                     tag = item.tag,
-                    type = Libbox.proxyDisplayType(item.type),
+                    type = proxyDisplayType(item.type),
                     urlTestDelay = item.urlTestDelay,
                     isSelected = selectedOutbound == item.tag,
                     onClick = { selectOutbound(item.tag) },

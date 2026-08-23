@@ -6,6 +6,7 @@ import io.nekohasekai.sfa.constant.Path
 import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
+import java.io.File
 
 @Suppress("RedundantSuspendModifier")
 object ProfileManager {
@@ -72,9 +73,36 @@ object ProfileManager {
         }
     }
 
+    suspend fun updateTyped(profileId: Long, typed: TypedProfile): Int {
+        try {
+            return instance.profileDao().updateTyped(profileId, typed)
+        } finally {
+            for (callback in callbacks.toList()) {
+                callback()
+            }
+        }
+    }
+
+    suspend fun updateEditable(profile: Profile): Int {
+        try {
+            return instance.profileDao().updateEditable(
+                profileId = profile.id,
+                name = profile.name,
+                icon = profile.icon,
+                typed = profile.typed,
+            )
+        } finally {
+            for (callback in callbacks.toList()) {
+                callback()
+            }
+        }
+    }
+
     suspend fun delete(profile: Profile): Int {
         try {
-            return instance.profileDao().delete(profile)
+            val deleted = instance.profileDao().delete(profile)
+            if (deleted > 0) deleteProfileFiles(profile)
+            return deleted
         } finally {
             for (callback in callbacks.toList()) {
                 callback()
@@ -84,7 +112,9 @@ object ProfileManager {
 
     suspend fun delete(profiles: List<Profile>): Int {
         try {
-            return instance.profileDao().delete(profiles)
+            val deleted = instance.profileDao().delete(profiles)
+            if (deleted > 0) profiles.forEach(::deleteProfileFiles)
+            return deleted
         } finally {
             for (callback in callbacks.toList()) {
                 callback()
@@ -93,6 +123,18 @@ object ProfileManager {
     }
 
     suspend fun list(): List<Profile> = instance.profileDao().list()
+
+    private fun deleteProfileFiles(profile: Profile) {
+        val configRoot = File(Application.application.filesDir, "configs").canonicalFile
+        val configFile = runCatching { File(profile.typed.path).canonicalFile }.getOrNull() ?: return
+        if (configFile.parentFile != configRoot) return
+        listOf(
+            configFile,
+            File(configFile.path + ".bak"),
+            File(configFile.path + ".mihomo-selections.json"),
+            File(configFile.path + ".mihomo-selections.json.bak"),
+        ).forEach { file -> runCatching { file.delete() } }
+    }
 
     fun remoteServerDao(): RemoteServer.Dao = instance.remoteServerDao()
 }

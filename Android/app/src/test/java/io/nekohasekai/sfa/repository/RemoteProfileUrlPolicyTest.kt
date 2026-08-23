@@ -6,14 +6,26 @@ import org.junit.Test
 
 class RemoteProfileUrlPolicyTest {
     @Test
-    fun acceptsHttpAndHttpsWithHost() {
+    fun acceptsHttpsWithHost() {
         assertEquals(
             "https://example.com/sub?token=abc",
             RemoteProfileUrlPolicy.validate("  https://example.com/sub?token=abc  "),
         )
+    }
+
+    @Test
+    fun acceptsHttpOnlyForExplicitLoopbackHosts() {
         assertEquals(
-            "HTTP://example.com/profile",
-            RemoteProfileUrlPolicy.validate("HTTP://example.com/profile"),
+            "HTTP://localhost:8080/profile",
+            RemoteProfileUrlPolicy.validate("HTTP://localhost:8080/profile"),
+        )
+        assertEquals(
+            "http://127.0.0.1/profile",
+            RemoteProfileUrlPolicy.validate("http://127.0.0.1/profile"),
+        )
+        assertEquals(
+            "http://[::1]:9090/profile",
+            RemoteProfileUrlPolicy.validate("http://[::1]:9090/profile"),
         )
     }
 
@@ -35,6 +47,20 @@ class RemoteProfileUrlPolicyTest {
         }
         assertThrows(IllegalArgumentException::class.java) {
             RemoteProfileUrlPolicy.validate("")
+        }
+    }
+
+    @Test
+    fun rejectsCleartextRemoteHostsAndLookalikes() {
+        listOf(
+            "http://example.com/profile",
+            "http://192.168.1.2/profile",
+            "http://127.0.0.2/profile",
+            "http://localhost.example.com/profile",
+        ).forEach { url ->
+            assertThrows(IllegalArgumentException::class.java) {
+                RemoteProfileUrlPolicy.validate(url)
+            }
         }
     }
 

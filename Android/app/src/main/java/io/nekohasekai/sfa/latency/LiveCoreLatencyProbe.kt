@@ -42,7 +42,7 @@ class LiveCoreLatencyProbe(
     }
 
     override suspend fun close() {
-        // The live Core remains owned by BoxService. The probe owns no client
-        // or socket and only observes the existing group stream.
+        // The probe owns no client or socket and only observes the existing
+        // group stream.
     }
 }

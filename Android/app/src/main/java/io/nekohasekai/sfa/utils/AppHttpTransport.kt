@@ -4,49 +4,46 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.bg.DefaultNetworkMonitor
+import io.nekohasekai.sfa.repository.RemoteProfileUrlPolicy
 import okhttp3.Dns
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
 import java.net.Inet4Address
 import java.net.InetAddress
-import java.net.InetSocketAddress
-import java.net.Proxy
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 /**
- * HTTP transport used by account and subscription traffic.
+ * HTTP transport used by subscription traffic.
  *
- * Account and subscription requests prefer IPv4, but retain the platform's
+ * Subscription requests prefer IPv4, but retain the platform's
  * IPv6/NAT64 result when the physical network has no usable IPv4 result.
- * While the core is running, app traffic first uses its local SOCKS listener
- * so account, subscription, and exit-IP requests follow the selected proxy.
- * The underlying non-VPN network remains the fallback for stopped or
- * unavailable core service states.
+ * Requests bind directly to Android's underlying non-VPN network. Mihomo
+ * intentionally exposes no local HTTP/SOCKS inbound, so probing the old
+ * sing-box port would only add a failed connection before every request.
  */
 object AppHttpTransport {
-    private const val LOCAL_SOCKS_PORT = 2333
+    enum class NetworkRoute {
+        /** Bypass an active VPN. Used for subscription and update bootstrap traffic. */
+        Underlying,
 
+        /** Follow Android's current default route, including this app's VPN. */
+        Active,
+    }
+
+    private const val DEFAULT_CALL_TIMEOUT_SECONDS = 35L
+
+    @Suppress("UNUSED_PARAMETER")
     fun execute(
         request: Request,
+        // Retained temporarily for source compatibility with vendor flavors.
         preferLocalSocks: Boolean = false,
+        callTimeoutSeconds: Long = DEFAULT_CALL_TIMEOUT_SECONDS,
+        networkRoute: NetworkRoute = NetworkRoute.Underlying,
     ): Response {
-        if (preferLocalSocks) {
-            runCatching {
-                return baseBuilder()
-                    .proxy(
-                        Proxy(
-                            Proxy.Type.SOCKS,
-                            InetSocketAddress.createUnresolved("127.0.0.1", LOCAL_SOCKS_PORT),
-                        ),
-                    ).build()
-                    .newCall(request)
-                    .execute()
-            }
-        }
-
-        val network = underlyingNetwork()
+        require(callTimeoutSeconds >= 0) { "callTimeoutSeconds must not be negative" }
+        val network = underlyingNetwork().takeIf { networkRoute == NetworkRoute.Underlying }
         val dns = object : Dns {
             override fun lookup(hostname: String): List<InetAddress> {
                 val addresses =
@@ -56,7 +53,7 @@ object AppHttpTransport {
                 return preferIPv4(hostname, addresses)
             }
         }
-        val builder = baseBuilder().dns(dns)
+        val builder = baseBuilder(callTimeoutSeconds).dns(dns)
         network?.socketFactory?.let(builder::socketFactory)
         return builder.build().newCall(request).execute()
     }
@@ -91,12 +88,16 @@ object AppHttpTransport {
             ?.first
     }
 
-    private fun baseBuilder() = OkHttpClient.Builder()
+    private fun baseBuilder(callTimeoutSeconds: Long) = OkHttpClient.Builder()
         .connectTimeout(12, TimeUnit.SECONDS)
         .readTimeout(20, TimeUnit.SECONDS)
         .writeTimeout(20, TimeUnit.SECONDS)
-        .callTimeout(35, TimeUnit.SECONDS)
+        .callTimeout(callTimeoutSeconds, TimeUnit.SECONDS)
         .retryOnConnectionFailure(true)
         .followRedirects(true)
-        .followSslRedirects(true)
+        .followSslRedirects(false)
+        .addNetworkInterceptor { chain ->
+            RemoteProfileUrlPolicy.validate(chain.request().url.toString())
+            chain.proceed(chain.request())
+        }
 }

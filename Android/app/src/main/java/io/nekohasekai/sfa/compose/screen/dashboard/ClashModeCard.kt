@@ -37,7 +37,13 @@ import io.nekohasekai.sfa.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ClashModeCard(modes: List<String>, selectedMode: String, onModeSelected: (String) -> Unit, modifier: Modifier = Modifier) {
+fun ClashModeCard(
+    modes: List<String>,
+    selectedMode: String,
+    onModeSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
     val ruleLabel = stringResource(R.string.proxy_mode_rule)
     val directLabel = stringResource(R.string.proxy_mode_direct)
     val globalLabel = stringResource(R.string.proxy_mode_global)
@@ -82,6 +88,7 @@ fun ClashModeCard(modes: List<String>, selectedMode: String, onModeSelected: (St
                     modeLabels = modeLabels,
                     selectedMode = selectedMode,
                     onModeSelected = onModeSelected,
+                    enabled = enabled,
                 )
             } else {
                 SingleChoiceSegmentedButtonRow(
@@ -96,6 +103,7 @@ fun ClashModeCard(modes: List<String>, selectedMode: String, onModeSelected: (St
                             ),
                             onClick = { onModeSelected(mode) },
                             selected = mode == selectedMode,
+                            enabled = enabled,
                         ) {
                             Text(modeLabels[mode] ?: mode)
                         }
@@ -112,12 +120,14 @@ private fun ModeDropdown(
     modeLabels: Map<String, String>,
     selectedMode: String,
     onModeSelected: (String) -> Unit,
+    enabled: Boolean,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
     Box(modifier = Modifier.fillMaxWidth()) {
         Surface(
             onClick = { expanded = true },
+            enabled = enabled,
             shape = RoundedCornerShape(12.dp),
             color = if (isSystemInDarkTheme()) {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
@@ -154,6 +164,7 @@ private fun ModeDropdown(
             modes.forEach { mode ->
                 DropdownMenuItem(
                     text = { Text(modeLabels[mode] ?: mode) },
+                    enabled = enabled,
                     onClick = {
                         onModeSelected(mode)
                         expanded = false

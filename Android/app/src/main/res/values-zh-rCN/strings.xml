@@ -1,9 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="profile_core">内核</string>
-    <string name="profile_core_sing_box">sing-box</string>
-    <string name="profile_core_mihomo">Mihomo</string>
-    <string name="profile_core_mihomo_hint">仅对 Clash/Mihomo YAML 订阅选择 Mihomo；已有配置将继续使用 sing-box。</string>
+    <string name="profile_core_mihomo_hint">订阅固定使用 Mihomo 内核，仅支持 Clash/Mihomo YAML。</string>
     <!-- App -->
     <string name="app_name" translatable="false">ClashNl</string>
     <string name="app_version_title">应用版本</string>
@@ -66,63 +63,6 @@
     <string name="title_log">日志</string>
     <string name="title_settings">设置</string>
     <string name="title_app_settings">应用</string>
-    <string name="account_title">账户与套餐</string>
-    <string name="account_settings_summary">登录机场账号、查看套餐并自动同步订阅</string>
-    <string name="account_login_heading">登录 ClashNL</string>
-    <string name="account_login_description">使用现有机场账号登录，已购买的套餐和订阅将自动同步。</string>
-    <string name="account_email">邮箱</string>
-    <string name="account_password">密码</string>
-    <string name="account_login_action">登录并同步</string>
-    <string name="account_security_hint">密码只用于本次登录请求；登录令牌由 Android Keystore 加密保护。</string>
-    <string name="account_no_plan">暂无有效套餐</string>
-    <string name="account_usage_value">已用 %1$s / %2$s</string>
-    <string name="account_expired">套餐已过期</string>
-    <string name="account_expiry">到期时间</string>
-    <string name="account_device_limit">设备数量</string>
-    <string name="account_speed_limit">速度限制</string>
-    <string name="account_speed_value">%1$d Mbps</string>
-    <string name="account_unlimited">不限</string>
-    <string name="account_subscription_sync">账户订阅</string>
-    <string name="account_subscription_synced">已同步到订阅列表</string>
-    <string name="account_subscription_pending">等待同步</string>
-    <string name="account_refresh_action">刷新账户与订阅</string>
-    <string name="account_retry_action">重试</string>
-    <string name="account_logout_action">退出登录</string>
-    <string name="account_logout_profile_hint">退出后会清除保存的账户会话，最近同步到本机的订阅配置继续保留。</string>
-    <string name="account_manage_plans_action">购买、续费或更换套餐</string>
-    <string name="account_plans_title">套餐与支付</string>
-    <string name="account_plan">订阅套餐</string>
-    <string name="account_plan_details">套餐详情</string>
-    <string name="account_choose_plan">选择套餐</string>
-    <string name="account_plan_description">套餐说明</string>
-    <string name="account_available_periods">可选周期</string>
-    <string name="account_plan_sold_out">已售罄</string>
-    <string name="account_plan_unavailable">当前套餐暂不可购买</string>
-    <string name="account_device_value">%1$d 台设备</string>
-    <string name="account_device_unlimited">设备数量不限</string>
-    <string name="account_period_price">%1$s · %2$s</string>
-    <string name="account_period_month">月付</string>
-    <string name="account_period_quarter">季付</string>
-    <string name="account_period_half_year">半年付</string>
-    <string name="account_period_year">年付</string>
-    <string name="account_period_two_years">两年付</string>
-    <string name="account_period_three_years">三年付</string>
-    <string name="account_period_onetime">一次性</string>
-    <string name="account_period_reset">流量重置</string>
-    <string name="account_confirm_purchase">确认订单</string>
-    <string name="account_payment_method">支付方式</string>
-    <string name="account_payment_fee">手续费：%1$s + %2$.2f%%</string>
-    <string name="account_purchase_notice">确认后才会创建订单。请在安全收银台完成支付，然后返回此页检查支付状态。</string>
-    <string name="account_create_and_pay">创建订单并支付</string>
-    <string name="account_pending_order">待支付订单</string>
-    <string name="account_trade_no">订单号：%1$s</string>
-    <string name="account_check_payment">检查支付结果</string>
-    <string name="account_cancel_order">取消订单</string>
-    <string name="account_continue_payment">继续支付</string>
-    <string name="account_open_cashier">打开收银台</string>
-    <string name="account_checkout_invalid_url">收银台返回的 HTTPS 地址无效。</string>
-    <string name="account_checkout_unknown_type">暂未识别的收银台响应类型：%1$d</string>
-    <string name="account_no_expiry">长期有效</string>
     <string name="title_new_profile">新建配置</string>
     <string name="title_edit_profile">编辑配置</string>
     <string name="title_edit_configuration">编辑配置</string>
@@ -147,11 +87,18 @@
     <string name="connections_in">入站</string>
     <string name="connections_out">出站</string>
     <string name="clash_mode">Clash 模式</string>
-    <string name="proxy_mode_rule">路由</string>
+    <string name="proxy_mode_rule">规则</string>
     <string name="proxy_mode_direct">直连</string>
     <string name="proxy_mode_global">全局</string>
     <string name="mode">模式</string>
     <string name="system_proxy">系统代理</string>
+    <string name="network_mode">网络模式</string>
+    <string name="network_mode_virtual_nic">虚拟网卡</string>
+    <string name="network_mode_virtual_nic_description">通过 Mihomo 接管 IPv4、IPv6 和 DNS，推荐用于完整代理设备流量。</string>
+    <string name="network_mode_system_proxy">系统代理</string>
+    <string name="network_mode_system_proxy_description">将 Mihomo 发布为 Android HTTP 代理。仅接管遵循系统代理的应用，其他协议仍走物理网络。</string>
+    <string name="network_mode_system_proxy_unavailable">系统代理模式需要 Android 10 或更高版本。</string>
+    <string name="network_mode_stop_before_change">请先停止服务，再切换网络模式。</string>
     <string name="url_test">测速</string>
     <string name="url_test_running">测速中…</string>
     <string name="nodes_start_vpn_hint">可选择节点或测试体验延迟</string>
@@ -202,7 +149,6 @@
     <string name="dashboard_normal_mode">代理</string>
     <string name="dashboard_open_subscriptions">打开订阅</string>
     <string name="dashboard_open_proxies">打开代理</string>
-    <string name="dashboard_open_settings">打开设置</string>
     <string name="dashboard_open_test">打开测试</string>
     <string name="dashboard_start_to_view_mode">启动服务后可查看和切换代理模式。</string>
     <string name="dashboard_connections">连接数（入站 / 出站）</string>
@@ -280,7 +226,7 @@
     <string name="profile_import_file">导入文件</string>
     <string name="profile_create">创建</string>
     <string name="profile_fetching_subscription">正在获取并验证订阅…</string>
-    <string name="profile_url_format_hint">支持 sing-box JSON / Clash/Mihomo YAML</string>
+    <string name="profile_url_format_hint">支持 Clash/Mihomo YAML</string>
     <string name="profile_share_url">通过二维码分享 URL</string>
     <string name="profile_input_required">必须</string>
     <string name="profile_update">更新</string>
@@ -311,8 +257,6 @@
     <string name="view_configuration">查看配置</string>
     <string name="save_as_file">保存为文件</string>
     <string name="share_as_file">分享为文件</string>
-    <string name="save_content_json">保存配置 JSON 文件</string>
-    <string name="share_content_json">分享配置 JSON 文件</string>
     <string name="unsaved_changes">未保存的更改</string>
     <string name="unsaved_changes_message">您有未保存的更改。要放弃它们吗？</string>
     <string name="import_profile_confirm_title">导入配置</string>
@@ -344,7 +288,6 @@
     <string name="core_data_size">数据大小</string>
     <string name="about">关于</string>
     <string name="source_code">源代码</string>
-    <string name="sponsor">赞助</string>
     <string name="working_directory">工作目录</string>
     <string name="beta_settings">Beta 版设置</string>
     <string name="disable_deprecated_warnings">禁用弃用警告</string>
@@ -411,10 +354,10 @@
     <string name="background_permission_description">申请必要的权限以使 VPN 正常运行。  如果您使用的是中国公司生产的设备，则授予权限后该卡可能不会消失。</string>
     <string name="request_background_permission">忽略电池优化</string>
     <string name="location_permission_title">位置权限</string>
-    <string name="location_permission_description">您的个人资料包含 &lt;strong&gt;&lt;tt&gt;wifi_ssid&lt;/tt&gt; 或 &lt;tt&gt;wifi_bssid&lt;/tt&gt; 路由规则&lt;/strong&gt;。为了使它们正常工作，sing-box 在&lt;strong&gt;后台&lt;/strong&gt;使用 &lt;strong&gt;位置&lt;/strong&gt; 权限来获取有关所连接 Wi-Fi 网络的信息。该信息将&lt;strong&gt;仅用于路由目的&lt;/strong&gt;。</string>
+    <string name="location_permission_description">您的配置包含基于 Wi-Fi 的路由规则。为了使它们正常工作，Mihomo 会在&lt;strong&gt;后台&lt;/strong&gt;使用&lt;strong&gt;位置&lt;/strong&gt;权限获取所连接 Wi-Fi 网络的信息。该信息将&lt;strong&gt;仅用于路由目的&lt;/strong&gt;。</string>
     <string name="location_permission_background_description">在 Android 10 及更高版本中，需要&lt;strong&gt;后台位置&lt;/strong&gt;权限。选择&lt;strong&gt;始终允许&lt;/strong&gt;以授予权限。</string>
     <string name="notification_permission_title">通知权限</string>
-    <string name="notification_permission_required_description">sing-box 无法在没有发送通知权限的情况下显示实时网速。请授予权限或禁用实时网速通知后再启动服务。</string>
+    <string name="notification_permission_required_description">Mihomo 无法在没有发送通知权限的情况下显示实时网速。请授予权限或禁用实时网速通知后再启动服务。</string>
     <string name="root_access_required">需要 Root 权限</string>
     <string name="root_access_denied">Root 权限被拒绝</string>
 
@@ -503,7 +446,7 @@
     <string name="error_empty_configuration">空配置</string>
     <string name="error_empty_file">空文件</string>
     <string name="error_decode_profile">解码配置文件失败：%s</string>
-    <string name="error_invalid_configuration">无效的 sing-box 配置：%s</string>
+    <string name="error_invalid_configuration">无效的 Mihomo 配置：%s</string>
     <string name="error_start_command_server">启动命令服务器</string>
     <string name="error_create_service">创建服务</string>
     <string name="error_start_service">启动服务</string>
@@ -717,7 +660,7 @@
     <string name="oom_report_kill_connections_description">当服务内存超出限制时，终止所有连接以释放内存。</string>
 
     <!-- Xposed Module -->
-    <string name="xposed_description">sing-box 的特权增强</string>
+    <string name="xposed_description">Mihomo 的特权增强</string>
     <!-- Privileged Enhancement -->
     <string name="privilege_settings">特权增强</string>
     <string name="privilege_module_title">特权模块</string>

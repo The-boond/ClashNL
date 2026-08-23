@@ -35,7 +35,7 @@ class TypedProfile() : Parcelable {
 
     var path = ""
     var type = Type.Local
-    var core = ProfileCore.SingBox
+    var core = ProfileCore.Mihomo
     var remoteURL: String = ""
     var lastUpdated: Date = Date(0)
     var autoUpdate: Boolean = false
@@ -67,6 +67,10 @@ class TypedProfile() : Parcelable {
         }
         if (version >= 3) {
             core = ProfileCore.fromOrdinal(reader.readInt())
+        } else {
+            // Profiles written before the core field existed contain legacy
+            // sing-box JSON and must never be sent to the Mihomo runtime.
+            core = ProfileCore.SingBox
         }
     }
 

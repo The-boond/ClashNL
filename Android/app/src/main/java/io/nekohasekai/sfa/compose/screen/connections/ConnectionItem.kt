@@ -43,10 +43,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.model.Connection
 import io.nekohasekai.sfa.utils.RemoteControlManager
+import io.nekohasekai.sfa.utils.formatBytes
 
 private fun Drawable.toBitmap(): Bitmap {
     if (this is BitmapDrawable) return bitmap
@@ -172,7 +172,7 @@ fun ConnectionItem(connection: Connection, onClick: () -> Unit, onClose: () -> U
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "↑ ${Libbox.formatBytes(connection.upload)}/s | ${Libbox.formatBytes(connection.uploadTotal)}",
+                            text = "↑ ${formatBytes(connection.upload)}/s | ${formatBytes(connection.uploadTotal)}",
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -190,7 +190,7 @@ fun ConnectionItem(connection: Connection, onClick: () -> Unit, onClose: () -> U
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Text(
-                            text = "↓ ${Libbox.formatBytes(connection.download)}/s | ${Libbox.formatBytes(connection.downloadTotal)}",
+                            text = "↓ ${formatBytes(connection.download)}/s | ${formatBytes(connection.downloadTotal)}",
                             style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )

@@ -2,8 +2,11 @@
 
 void coreInit(char* home, int sdkVersion);
 char* validateConfig(char* content, char* controller, char* secret);
-char* loadConfig(char* content, char* controller, char* secret);
-char* startTun(int fd, char* stack, char* gateway, char* dns, void* callback);
+char* describeProxyGroups(char* content);
+char* loadConfig(char* content, char* controller, char* secret, int httpProxyPort);
+char* setMode(char* mode);
+void prepareTun(void* callback);
+char* startTun(int fd, char* stack, char* gateway, char* dns);
 void stopTun(void);
 void stopCore(void);
 

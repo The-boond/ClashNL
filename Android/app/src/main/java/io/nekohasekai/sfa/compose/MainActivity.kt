@@ -8,15 +8,11 @@ import android.net.Uri
 import android.net.VpnService
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +27,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material3.AlertDialog
@@ -39,7 +34,6 @@ import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -70,7 +64,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.core.os.ConfigurationCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -79,12 +72,9 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dev.jeziellago.compose.markdowntext.MarkdownText
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.BuildConfig
 import io.nekohasekai.sfa.R
-import io.nekohasekai.sfa.bg.CrashReportManager
-import io.nekohasekai.sfa.bg.OOMReportManager
 import io.nekohasekai.sfa.bg.ServiceConnection
 import io.nekohasekai.sfa.bg.ServiceNotification
 import io.nekohasekai.sfa.compat.WindowSizeClassCompat
@@ -93,9 +83,7 @@ import io.nekohasekai.sfa.compose.base.GlobalEventBus
 import io.nekohasekai.sfa.compose.base.SelectableMessageDialog
 import io.nekohasekai.sfa.compose.base.UiEvent
 import io.nekohasekai.sfa.compose.component.CurvedBottomNavigationBar
-import io.nekohasekai.sfa.compose.component.RemoteStatusBar
 import io.nekohasekai.sfa.compose.component.UpdateAvailableDialog
-import io.nekohasekai.sfa.compose.component.UptimeText
 import io.nekohasekai.sfa.compose.model.Connection
 import io.nekohasekai.sfa.compose.navigation.NewProfileArgs
 import io.nekohasekai.sfa.compose.navigation.ProfileRoutes
@@ -108,28 +96,21 @@ import io.nekohasekai.sfa.compose.screen.connections.ConnectionsPage
 import io.nekohasekai.sfa.compose.screen.connections.ConnectionsViewModel
 import io.nekohasekai.sfa.compose.screen.dashboard.DashboardViewModel
 import io.nekohasekai.sfa.compose.screen.dashboard.GroupsCard
+import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsEvent
 import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsViewModel
 import io.nekohasekai.sfa.compose.screen.log.LogViewModel
-import io.nekohasekai.sfa.compose.screen.tools.OpenConnectStatusViewModel
-import io.nekohasekai.sfa.compose.screen.tools.OpenVPNStatusViewModel
-import io.nekohasekai.sfa.compose.screen.tools.TailscaleSSHSharedViewModel
-import io.nekohasekai.sfa.compose.screen.tools.TailscaleStatusViewModel
-import io.nekohasekai.sfa.compose.screen.usbip.USBIPStatusViewModel
 import io.nekohasekai.sfa.compose.theme.SFATheme
 import io.nekohasekai.sfa.compose.topbar.LocalTopBarController
 import io.nekohasekai.sfa.compose.topbar.TopBarController
 import io.nekohasekai.sfa.compose.topbar.TopBarEntry
 import io.nekohasekai.sfa.constant.Action
 import io.nekohasekai.sfa.constant.Alert
-import io.nekohasekai.sfa.constant.ServiceMode
 import io.nekohasekai.sfa.constant.Status
-import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.ktx.hasPermission
 import io.nekohasekai.sfa.ktx.launchCustomTab
 import io.nekohasekai.sfa.runtime.ProfileRuntime
 import io.nekohasekai.sfa.update.UpdateState
-import io.nekohasekai.sfa.utils.RemoteControlManager
 import io.nekohasekai.sfa.vendor.Vendor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -171,6 +152,7 @@ class MainActivity :
         ) { isGranted ->
             if (Settings.dynamicNotification && !isGranted) {
                 onServiceAlert(Alert.RequestNotificationPermission, null)
+                cancelPendingDashboardStart()
             } else {
                 startService0()
             }
@@ -184,6 +166,8 @@ class MainActivity :
                 } else {
                     startService()
                 }
+            } else {
+                cancelPendingDashboardStart()
             }
         }
 
@@ -191,6 +175,8 @@ class MainActivity :
         registerForActivityResult(ActivityResultContracts.RequestPermission()) {
             if (it) {
                 startService()
+            } else {
+                cancelPendingDashboardStart()
             }
         }
 
@@ -202,6 +188,7 @@ class MainActivity :
                 startService0()
             } else {
                 onServiceAlert(Alert.RequestVPNPermission, null)
+                cancelPendingDashboardStart()
             }
         }
     private val pendingNavigationRoute = mutableStateOf<String?>(null)
@@ -209,18 +196,10 @@ class MainActivity :
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        ConfigurationCompat.getLocales(resources.configuration)[0]?.let { locale ->
-            runCatching {
-                Libbox.setLocale(locale.toLanguageTag())
-            }.onFailure {
-                Log.d("MainActivity", "set locale: ${it.message}")
-            }
-        }
         enableEdgeToEdge()
         showPrivacyDisclosure = !privacyPreferences.getBoolean("vpn_disclosure_v1", false)
 
         connection.reconnect()
-        RemoteControlManager.restore()
 
         UpdateState.loadFromCache()
         if (Settings.checkUpdateEnabled) {
@@ -278,17 +257,6 @@ class MainActivity :
             launchCustomTab(uri.toString())
             return
         }
-        if (uri.scheme == "sing-box" && uri.host == "import-remote-profile") {
-            try {
-                val profile = Libbox.parseRemoteProfileImportLink(uri.toString())
-                pendingImportProfile = Triple(profile.name, profile.host, profile.url)
-                showImportProfileDialog = true
-            } catch (e: Exception) {
-                pendingIntentErrorMessage = e.message ?: "Failed to parse profile link"
-            }
-            return
-        }
-
         if (
             (uri.scheme == "clashnl" && uri.host == "import-remote-profile") ||
             ((uri.scheme == "clash" || uri.scheme == "clashmeta") && uri.host == "install-config")
@@ -386,6 +354,7 @@ class MainActivity :
     fun startService() {
         if (!privacyPreferences.getBoolean("vpn_disclosure_v1", false)) {
             showPrivacyDisclosure = true
+            cancelPendingDashboardStart()
             return
         }
         if (Settings.dynamicNotification &&
@@ -399,28 +368,21 @@ class MainActivity :
     }
 
     private fun startService0() {
+        if (::dashboardViewModel.isInitialized) {
+            dashboardViewModel.updateServiceStatus(Status.Starting)
+        }
         lifecycleScope.launch(Dispatchers.IO) {
-            val core = ProfileRuntime.selectedCore()
-            if (core == ProfileCore.SingBox && Settings.rebuildServiceMode()) {
-                stopLocalServiceAndWait()
-                connection.reconnect()
-            }
-            if (core == ProfileCore.Mihomo || Settings.serviceMode == ServiceMode.VPN) {
+            try {
                 if (prepare()) {
                     return@launch
                 }
-            }
-            connection.reconnect()
-            ProfileRuntime.startSelected(this@MainActivity)
-        }
-    }
-
-    private suspend fun stopLocalServiceAndWait() {
-        ProfileRuntime.stopActive(this)
-        withContext(Dispatchers.Main) {
-            repeat(50) {
-                if (currentServiceStatus == Status.Stopped) return@withContext
-                delay(100L)
+                connection.reconnect()
+                ProfileRuntime.startSelected(this@MainActivity)
+            } catch (exception: Exception) {
+                withContext(Dispatchers.Main) {
+                    onServiceAlert(Alert.StartService, exception.message)
+                    cancelPendingDashboardStart()
+                }
             }
         }
     }
@@ -436,7 +398,14 @@ class MainActivity :
             }
         } catch (e: Exception) {
             onServiceAlert(Alert.RequestVPNPermission, e.message)
+            cancelPendingDashboardStart()
             true
+        }
+    }
+
+    private fun cancelPendingDashboardStart() {
+        if (::dashboardViewModel.isInitialized) {
+            dashboardViewModel.cancelPendingServiceStart()
         }
     }
 
@@ -523,7 +492,7 @@ class MainActivity :
                                 when (modeToShow) {
                                     UiEvent.ApplyServiceChange.Mode.Reload -> {
                                         withContext(Dispatchers.IO) {
-                                            Libbox.newStandaloneCommandClient().serviceReload()
+                                            ProfileRuntime.reloadSelectedIfRunning(this@MainActivity)
                                         }
                                     }
 
@@ -821,11 +790,6 @@ class MainActivity :
             )
         }
 
-        val remoteServer by RemoteControlManager.remoteServer.collectAsState()
-        val remoteConnected by RemoteControlManager.isConnected.collectAsState()
-        val remoteStartedAt by RemoteControlManager.startedAt.collectAsState()
-        val isRemote = remoteServer != null
-
         // Initialize the dashboard view model and store reference
         val dashboardViewModel: DashboardViewModel = viewModel()
         if (!::dashboardViewModel.isInitialized) {
@@ -865,13 +829,11 @@ class MainActivity :
         }
 
         val isSettingsSubScreen = currentRoute?.startsWith("settings/") == true
-        val isToolsSubScreen = currentRoute?.startsWith("tools/") == true
         val isConnectionsDetail = currentRoute?.startsWith("connections/detail") == true
         val isProfileRoute = currentRoute?.startsWith("profile/") == true
         val currentRootRoute =
             when {
                 isSettingsSubScreen -> Screen.Settings.route
-                isToolsSubScreen -> Screen.Tools.route
                 currentRoute?.startsWith(Screen.Connections.route) == true -> Screen.Connections.route
                 currentRoute?.startsWith(Screen.Log.route) == true -> Screen.Log.route
                 isProfileRoute -> Screen.Subscriptions.route
@@ -882,7 +844,7 @@ class MainActivity :
         val isGroupsRoute = currentRootRoute == Screen.Groups.route
         val isLogRoute = currentRootRoute == Screen.Log.route
 
-        val isSubScreen = isSettingsSubScreen || isToolsSubScreen || isConnectionsDetail || isProfileRoute
+        val isSubScreen = isSettingsSubScreen || isConnectionsDetail || isProfileRoute
         // Get LogViewModel instance if we're on the Log screen
         val logViewModel: LogViewModel? =
             if (isLogRoute) {
@@ -891,19 +853,24 @@ class MainActivity :
                 null
             }
 
-        val groupsViewModel: GroupsViewModel? =
-            if (isSubscriptionsRoute || isGroupsRoute) {
-                viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            @Suppress("UNCHECKED_CAST")
-                            return GroupsViewModel(dashboardViewModel.commandClient) as T
-                        }
-                    },
-                )
-            } else {
-                null
+        val groupsViewModel: GroupsViewModel =
+            viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        @Suppress("UNCHECKED_CAST")
+                        return GroupsViewModel(dashboardViewModel.commandClient) as T
+                    }
+                },
+            )
+
+        LaunchedEffect(groupsViewModel) {
+            groupsViewModel.events.collect { event ->
+                if (event is GroupsEvent.GroupSelected) {
+                    dashboardViewModel.refreshLocalGroups()
+                    dashboardViewModel.refreshIpInfo(force = true)
+                }
             }
+        }
 
         val connectionsViewModel: ConnectionsViewModel? =
             if (isConnectionsRoute) {
@@ -912,43 +879,8 @@ class MainActivity :
                 null
             }
 
-        val tailscaleSSHSharedViewModel: TailscaleSSHSharedViewModel = viewModel()
-
-        val isToolsRoute = currentRootRoute == Screen.Tools.route
-        val tailscaleStatusViewModel: TailscaleStatusViewModel? =
-            if (isToolsRoute) {
-                viewModel()
-            } else {
-                null
-            }
-
-        val usbIPStatusViewModel: USBIPStatusViewModel? =
-            if (isToolsRoute) {
-                viewModel()
-            } else {
-                null
-            }
-
-        val openConnectStatusViewModel: OpenConnectStatusViewModel? =
-            if (isToolsRoute) {
-                viewModel()
-            } else {
-                null
-            }
-
-        val openVPNStatusViewModel: OpenVPNStatusViewModel? =
-            if (isToolsRoute) {
-                viewModel()
-            } else {
-                null
-            }
-
         val showConnectionsInNav =
-            if (isRemote) {
-                remoteConnected
-            } else {
-                currentServiceStatus == Status.Started || currentServiceStatus == Status.Starting
-            }
+            currentServiceStatus == Status.Started || currentServiceStatus == Status.Starting
 
         val railScreens =
             listOf(
@@ -962,11 +894,9 @@ class MainActivity :
                 add(Screen.Subscriptions.route)
                 add(Screen.Groups.route)
                 add(Screen.Dashboard.route)
-                // These routes remain available to internal diagnostics and
-                // deep links, but are intentionally hidden from primary
-                // navigation to keep the everyday workflow focused.
+                // Logs remain available to internal diagnostics while the
+                // old libbox-backed tools are not part of the Mihomo app.
                 add(Screen.Log.route)
-                add(Screen.Tools.route)
                 add(Screen.Settings.route)
                 if (showConnectionsInNav) {
                     add(Screen.Connections.route)
@@ -1045,14 +975,12 @@ class MainActivity :
             ) {
                 // Local VPN control lives exclusively on the dashboard service
                 // card. Other root pages stay focused on their own task.
-                val showStatusBar = isRemote
                 val showStartFab = false
 
                 SFANavHost(
                     navController = navController,
                     serviceStatus = currentServiceStatus,
                     showStartFab = showStartFab,
-                    showStatusBar = showStatusBar,
                     newProfileArgs = newProfileArgs,
                     onClearNewProfileArgs = { newProfileArgs = NewProfileArgs() },
                     onOpenNewProfile = openNewProfile,
@@ -1061,82 +989,8 @@ class MainActivity :
                     logViewModel = logViewModel,
                     groupsViewModel = groupsViewModel,
                     connectionsViewModel = connectionsViewModel,
-                    tailscaleStatusViewModel = tailscaleStatusViewModel,
-                    tailscaleSSHSharedViewModel = tailscaleSSHSharedViewModel,
-                    usbIPStatusViewModel = usbIPStatusViewModel,
-                    openConnectStatusViewModel = openConnectStatusViewModel,
-                    openVPNStatusViewModel = openVPNStatusViewModel,
                     modifier = Modifier.fillMaxSize(),
                 )
-                if (!useNavigationRail) {
-                    if (isRemote) {
-                        RemoteStatusBar(
-                            visible = !isSubScreen,
-                            serverName = remoteServer?.displayName ?: "",
-                            isConnected = remoteConnected,
-                            startTime = remoteStartedAt,
-                            groupsCount = dashboardUiState.groupsCount,
-                            hasGroups = dashboardUiState.hasGroups,
-                            onGroupsClick = { showGroupsSheet = true },
-                            connectionsCount = dashboardUiState.connectionsCount,
-                            onConnectionsClick = { showConnectionsSheet = true },
-                            onDisconnectClick = { RemoteControlManager.exitRemoteControl() },
-                            modifier = Modifier.align(Alignment.BottomCenter),
-                        )
-                    }
-                }
-
-                val showPadFab = useNavigationRail && !isSubScreen && isRemote
-                if (useNavigationRail) {
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = showPadFab,
-                        enter = scaleIn(),
-                        exit = scaleOut(),
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(20.dp),
-                    ) {
-                        ExtendedFloatingActionButton(
-                            onClick = { RemoteControlManager.exitRemoteControl() },
-                            icon = {
-                                Icon(
-                                    imageVector = Icons.Default.LinkOff,
-                                    contentDescription = stringResource(R.string.remote_disconnect),
-                                )
-                            },
-                            text = {
-                                if (remoteConnected && remoteStartedAt != null) {
-                                    UptimeText(startTime = remoteStartedAt!!)
-                                } else {
-                                    Text(
-                                        text =
-                                        if (remoteConnected) {
-                                            remoteServer?.displayName ?: ""
-                                        } else {
-                                            stringResource(R.string.remote_connecting)
-                                        },
-                                        style = MaterialTheme.typography.labelLarge,
-                                    )
-                                }
-                            },
-                            containerColor = MaterialTheme.colorScheme.primaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.height(64.dp),
-                        )
-                    }
-                }
-            }
-        }
-
-        val crashReportUnreadCount by CrashReportManager.unreadCount.collectAsState()
-        val oomReportUnreadCount by OOMReportManager.unreadCount.collectAsState()
-        // The crash/OOM report entries are hidden in remote control mode.
-        val toolsUnreadCount = if (isRemote) 0 else crashReportUnreadCount + oomReportUnreadCount
-
-        LaunchedEffect(Unit) {
-            withContext(Dispatchers.IO) {
-                CrashReportManager.refresh()
-                OOMReportManager.refresh()
             }
         }
 
@@ -1155,10 +1009,6 @@ class MainActivity :
                                     icon = {
                                         if (screen == Screen.Settings && hasUpdate) {
                                             BadgedBox(badge = { Badge(containerColor = MaterialTheme.colorScheme.primary) }) {
-                                                Icon(screen.icon, contentDescription = null)
-                                            }
-                                        } else if (screen == Screen.Tools && toolsUnreadCount > 0) {
-                                            BadgedBox(badge = { Badge(containerColor = MaterialTheme.colorScheme.error) { Text("$toolsUnreadCount") } }) {
                                                 Icon(screen.icon, contentDescription = null)
                                             }
                                         } else {
@@ -1222,14 +1072,6 @@ class MainActivity :
         // Groups ModalBottomSheet
         if (showGroupsSheet) {
             val groupsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-            val groupsViewModel: GroupsViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                        @Suppress("UNCHECKED_CAST")
-                        return GroupsViewModel(dashboardViewModel.commandClient) as T
-                    }
-                },
-            )
             val groupsUiState by groupsViewModel.uiState.collectAsState()
             val allCollapsed = groupsUiState.expandedGroups.isEmpty()
 
@@ -1265,7 +1107,7 @@ class MainActivity :
                                     color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 when {
-                                    !isRemote && currentServiceStatus == Status.Stopped -> {
+                                    currentServiceStatus == Status.Stopped -> {
                                         TextButton(
                                             onClick = dashboardViewModel::toggleService,
                                             enabled = dashboardUiState.selectedProfileId >= 0,
@@ -1274,11 +1116,8 @@ class MainActivity :
                                         }
                                     }
 
-                                    !isRemote &&
-                                        (
-                                            currentServiceStatus == Status.Starting ||
-                                                currentServiceStatus == Status.Stopping
-                                            ) -> {
+                                    currentServiceStatus == Status.Starting ||
+                                        currentServiceStatus == Status.Stopping -> {
                                         CircularProgressIndicator(
                                             modifier = Modifier.size(22.dp),
                                             strokeWidth = 2.dp,

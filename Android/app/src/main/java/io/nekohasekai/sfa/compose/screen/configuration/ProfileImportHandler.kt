@@ -3,14 +3,14 @@ package io.nekohasekai.sfa.compose.screen.configuration
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import io.nekohasekai.libbox.Libbox
-import io.nekohasekai.libbox.ProfileContent
 import io.nekohasekai.sfa.R
-import io.nekohasekai.sfa.config.ClashConfigNormalizer
+import io.nekohasekai.sfa.config.MihomoProfileContent
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.TypedProfile
+import io.nekohasekai.sfa.mihomo.MihomoConfig
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
 import io.nekohasekai.sfa.repository.ProfileRemoteRepository
 import io.nekohasekai.sfa.repository.SubscriptionMetadataParser
 import io.nekohasekai.sfa.utils.HTTPClient
@@ -18,7 +18,6 @@ import io.nekohasekai.sfa.utils.ProfileConfigStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.nio.charset.StandardCharsets
 import java.util.Date
 
 class ProfileImportHandler(private val context: Context) {
@@ -57,23 +56,16 @@ class ProfileImportHandler(private val context: Context) {
     suspend fun importFromUri(uri: Uri): ImportResult = withContext(Dispatchers.IO) {
         try {
             val data =
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                context.contentResolver.openInputStream(uri)?.use { MihomoProfileContent.readUtf8(it) }
                     ?: return@withContext ImportResult.Error(context.getString(R.string.error_empty_file))
             val filename = getFileNameFromUri(uri)
-            val dataString = String(data, StandardCharsets.UTF_8)
-            val normalized = runCatching { ClashConfigNormalizer.normalize(dataString) }
+            val normalized = runCatching { normalizeAndValidate(data) }
             normalized.getOrNull()?.let {
-                return@withContext importConfiguration(it.content, filename)
-            }
-
-            val profileContent = runCatching { Libbox.decodeProfileContent(data) }
-            profileContent.getOrNull()?.let {
-                return@withContext importProfile(it)
+                return@withContext importConfiguration(it, filename)
             }
 
             ImportResult.Error(
                 normalized.exceptionOrNull()?.message
-                    ?: profileContent.exceptionOrNull()?.message
                     ?: context.getString(R.string.error_decode_profile, "Unknown profile format"),
             )
         } catch (exception: Exception) {
@@ -84,23 +76,16 @@ class ProfileImportHandler(private val context: Context) {
     suspend fun parseUri(uri: Uri): UriParseResult = withContext(Dispatchers.IO) {
         try {
             val data =
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+                context.contentResolver.openInputStream(uri)?.use { MihomoProfileContent.readUtf8(it) }
                     ?: return@withContext UriParseResult.Error(context.getString(R.string.error_empty_file))
             val filename = getFileNameFromUri(uri)
-            val dataString = String(data, StandardCharsets.UTF_8)
 
-            if (runCatching { ClashConfigNormalizer.normalize(dataString) }.isSuccess) {
+            if (runCatching { normalizeAndValidate(data) }.isSuccess) {
                 return@withContext UriParseResult.Success(filename)
             }
 
-            val profileContent = runCatching { Libbox.decodeProfileContent(data) }
-            profileContent.getOrNull()?.let {
-                return@withContext UriParseResult.Success(it.name)
-            }
-
             UriParseResult.Error(
-                profileContent.exceptionOrNull()?.message
-                    ?: context.getString(R.string.error_decode_profile, "Unknown profile format"),
+                context.getString(R.string.error_decode_profile, "仅支持 Clash/Mihomo YAML"),
             )
         } catch (exception: Exception) {
             UriParseResult.Error(exception.message ?: "Unknown error")
@@ -113,12 +98,10 @@ class ProfileImportHandler(private val context: Context) {
                 return@withContext QRCodeParseResult.RemoteProfile(it.name, it.host, it.url)
             }
 
-            if (runCatching { ClashConfigNormalizer.normalize(data) }.isSuccess) {
+            if (runCatching { normalizeAndValidate(data) }.isSuccess) {
                 return@withContext QRCodeParseResult.LocalProfile("ClashNl Profile")
             }
-
-            val content = Libbox.decodeProfileContent(data.toByteArray())
-            QRCodeParseResult.LocalProfile(content.name)
+            QRCodeParseResult.Error(context.getString(R.string.error_decode_profile, "仅支持 Clash/Mihomo YAML"))
         } catch (exception: Exception) {
             QRCodeParseResult.Error(
                 context.getString(R.string.error_decode_profile, exception.message ?: "Unknown profile format"),
@@ -132,12 +115,11 @@ class ProfileImportHandler(private val context: Context) {
                 return@withContext importRemoteProfile(it.name, it.url)
             }
 
-            val normalized = runCatching { ClashConfigNormalizer.normalize(data) }
+            val normalized = runCatching { normalizeAndValidate(data) }
             normalized.getOrNull()?.let {
-                return@withContext importConfiguration(it.content, "ClashNl Profile")
+                return@withContext importConfiguration(it, "ClashNl Profile")
             }
-
-            importProfile(Libbox.decodeProfileContent(data.toByteArray()))
+            ImportResult.Error(normalized.exceptionOrNull()?.message ?: "仅支持 Clash/Mihomo YAML")
         } catch (exception: Exception) {
             ImportResult.Error(exception.message ?: "Unknown error")
         }
@@ -145,11 +127,11 @@ class ProfileImportHandler(private val context: Context) {
 
     suspend fun parseQRSData(data: ByteArray): QRSParseResult = withContext(Dispatchers.IO) {
         try {
-            val dataString = String(data, StandardCharsets.UTF_8)
-            if (runCatching { ClashConfigNormalizer.normalize(dataString) }.isSuccess) {
+            val dataString = MihomoProfileContent.decodeUtf8(data)
+            if (runCatching { normalizeAndValidate(dataString) }.isSuccess) {
                 return@withContext QRSParseResult.Success("ClashNl Profile")
             }
-            QRSParseResult.Success(Libbox.decodeProfileContent(data).name)
+            QRSParseResult.Error(context.getString(R.string.error_decode_profile, "仅支持 Clash/Mihomo YAML"))
         } catch (exception: Exception) {
             QRSParseResult.Error(
                 context.getString(R.string.error_decode_profile, exception.message ?: "Unknown profile format"),
@@ -159,72 +141,24 @@ class ProfileImportHandler(private val context: Context) {
 
     suspend fun importFromQRSData(data: ByteArray): ImportResult = withContext(Dispatchers.IO) {
         try {
-            val dataString = String(data, StandardCharsets.UTF_8)
-            val normalized = runCatching { ClashConfigNormalizer.normalize(dataString) }
+            val dataString = MihomoProfileContent.decodeUtf8(data)
+            val normalized = runCatching { normalizeAndValidate(dataString) }
             normalized.getOrNull()?.let {
-                return@withContext importConfiguration(it.content, "ClashNl Profile")
+                return@withContext importConfiguration(it, "ClashNl Profile")
             }
-            importProfile(Libbox.decodeProfileContent(data))
+            ImportResult.Error(normalized.exceptionOrNull()?.message ?: "仅支持 Clash/Mihomo YAML")
         } catch (exception: Exception) {
             ImportResult.Error(exception.message ?: "Unknown error")
         }
     }
 
-    private suspend fun importProfile(content: ProfileContent): ImportResult {
-        val typedProfile = TypedProfile()
-
-        when (content.type) {
-            Libbox.ProfileTypeLocal -> {
-                typedProfile.type = TypedProfile.Type.Local
-            }
-            Libbox.ProfileTypeiCloud -> {
-                return ImportResult.Error(context.getString(R.string.icloud_profile_unsupported))
-            }
-            Libbox.ProfileTypeRemote -> {
-                typedProfile.type = TypedProfile.Type.Remote
-                typedProfile.remoteURL = content.remotePath
-                typedProfile.autoUpdate = content.autoUpdate
-                typedProfile.autoUpdateInterval = content.autoUpdateInterval
-                typedProfile.lastUpdated = Date(content.lastUpdated)
-            }
-        }
-        val profileName =
-            if (typedProfile.type == TypedProfile.Type.Remote && content.name.isBlank()) {
-                ProfileNameGenerator.nextDefaultSubscriptionName(context)
-            } else {
-                content.name.ifBlank { context.getString(R.string.imported_profile_default_name) }
-            }
-        val profile = Profile(name = profileName, typed = typedProfile)
-        profile.userOrder = ProfileManager.nextOrder()
-
-        val source = if (content.config.isNotBlank()) {
-            content.config
-        } else if (typedProfile.type == TypedProfile.Type.Remote && typedProfile.remoteURL.isNotBlank()) {
-            HTTPClient().use {
-                val response = it.getSubscription(typedProfile.remoteURL)
-                SubscriptionMetadataParser.parse(response.headers, response.content)?.replaceOn(typedProfile)
-                response.content
-            }
-        } else {
-            return ImportResult.Error(context.getString(R.string.error_empty_file))
-        }
-        val normalized = ClashConfigNormalizer.normalize(source).content
-
-        val fileID = ProfileManager.nextFileID()
-        val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
-        val configFile = File(configDirectory, "$fileID.json")
-        ProfileConfigStore.write(configFile, normalized)
-        typedProfile.path = configFile.path
-
-        ProfileManager.create(profile, andSelect = true)
-        return ImportResult.Success(profile)
-    }
-
     private suspend fun importRemoteProfile(name: String, url: String): ImportResult {
-        val fetched = ProfileRemoteRepository.fetch(ProfileCore.SingBox, url)
+        val fetched = ProfileRemoteRepository.fetch(url)
+        val normalized = normalizeAndValidate(fetched.content)
         val typedProfile =
             TypedProfile().apply {
                 type = TypedProfile.Type.Remote
+                core = ProfileCore.Mihomo
                 remoteURL = url
                 autoUpdate = true
                 autoUpdateInterval = 60
@@ -242,8 +176,8 @@ class ProfileImportHandler(private val context: Context) {
 
         val fileID = ProfileManager.nextFileID()
         val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
-        val configFile = File(configDirectory, "$fileID.json")
-        ProfileConfigStore.write(configFile, fetched.content)
+        val configFile = File(configDirectory, "$fileID.yaml")
+        ProfileConfigStore.write(configFile, normalized)
         typedProfile.path = configFile.path
 
         ProfileManager.create(profile, andSelect = true)
@@ -251,10 +185,11 @@ class ProfileImportHandler(private val context: Context) {
     }
 
     private suspend fun importConfiguration(configContent: String, profileName: String): ImportResult = try {
-        val normalized = ClashConfigNormalizer.normalize(configContent).content
+        val normalized = normalizeAndValidate(configContent)
         val typedProfile =
             TypedProfile().apply {
                 type = TypedProfile.Type.Local
+                core = ProfileCore.Mihomo
             }
         val profile =
             Profile(
@@ -266,7 +201,7 @@ class ProfileImportHandler(private val context: Context) {
 
         val fileID = ProfileManager.nextFileID()
         val configDirectory = File(context.filesDir, "configs").also { it.mkdirs() }
-        val configFile = File(configDirectory, "$fileID.json")
+        val configFile = File(configDirectory, "$fileID.yaml")
         ProfileConfigStore.write(configFile, normalized)
         typedProfile.path = configFile.path
 
@@ -288,11 +223,6 @@ class ProfileImportHandler(private val context: Context) {
             )
         }
 
-        if (scheme == "sing-box" && uri.host == "import-remote-profile") {
-            val profileInfo = Libbox.parseRemoteProfileImportLink(value)
-            return RemoteProfileLink(profileInfo.name, profileInfo.host, profileInfo.url)
-        }
-
         val isClashInstallLink =
             (scheme == "clash" || scheme == "clashmeta") && uri.host == "install-config"
         val isClashNlLink = scheme == "clashnl" && uri.host == "import-remote-profile"
@@ -310,6 +240,12 @@ class ProfileImportHandler(private val context: Context) {
     }
 
     private fun extractHostFromUrl(url: String): String = runCatching { Uri.parse(url).host }.getOrNull() ?: url
+
+    private suspend fun normalizeAndValidate(content: String): String {
+        val normalized = MihomoProfileContent.normalize(content)
+        MihomoRuntimeRepository.controller(context).validateConfig(MihomoConfig(normalized))
+        return normalized
+    }
 
     private fun getFileNameFromUri(uri: Uri): String {
         var filename = "Imported Profile"

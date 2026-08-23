@@ -3,6 +3,7 @@ package io.nekohasekai.sfa.compose.screen.connections
 import androidx.lifecycle.viewModelScope
 import io.nekohasekai.libbox.ConnectionEvents
 import io.nekohasekai.libbox.Connections
+import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.compose.base.BaseViewModel
 import io.nekohasekai.sfa.compose.base.ScreenEvent
 import io.nekohasekai.sfa.compose.model.Connection
@@ -10,6 +11,9 @@ import io.nekohasekai.sfa.compose.model.ConnectionSort
 import io.nekohasekai.sfa.compose.model.ConnectionStateFilter
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.ktx.toList
+import io.nekohasekai.sfa.mihomo.MihomoConnection
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeState
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
 import io.nekohasekai.sfa.utils.CommandClient
 import io.nekohasekai.sfa.utils.CommandTarget
@@ -47,6 +51,7 @@ class ConnectionsViewModel :
         CommandClient.ConnectionType.Connections,
         this,
     )
+    private val mihomoController = MihomoRuntimeRepository.controller(Application.application)
 
     private val _serviceStatus = MutableStateFlow(Status.Stopped)
     val serviceStatus = _serviceStatus.asStateFlow()
@@ -57,6 +62,7 @@ class ConnectionsViewModel :
     private var connectionsStore: Connections? = null
     private val connectionsMutex = Mutex()
     private val connectionsGeneration = AtomicLong(0)
+    private var activeRemoteServerId: Long? = null
 
     override fun createInitialState() = ConnectionsUiState()
 
@@ -83,10 +89,17 @@ class ConnectionsViewModel :
             ) { foreground, screenOn, visibleCount, status, (remoteServerId, remoteConnected) ->
                 ConnectionState(foreground, screenOn, visibleCount, status, remoteServerId, remoteConnected)
             }.collect { state ->
-                val serviceReady =
-                    if (state.remoteServerId != null) state.remoteConnected else state.status == Status.Started
-                val shouldConnect = state.foreground && state.screenOn &&
-                    state.visibleCount > 0 && serviceReady
+                if (activeRemoteServerId != state.remoteServerId) {
+                    activeRemoteServerId = state.remoteServerId
+                    withContext(Dispatchers.Default) {
+                        connectionsMutex.withLock {
+                            connectionsStore = null
+                        }
+                        connectionsGeneration.incrementAndGet()
+                    }
+                }
+                val shouldConnect = state.remoteServerId != null && state.foreground && state.screenOn &&
+                    state.visibleCount > 0 && state.remoteConnected
                 if (shouldConnect) {
                     updateState { copy(isLoading = true) }
                     commandClient.connect()
@@ -95,10 +108,30 @@ class ConnectionsViewModel :
                 }
             }
         }
+
+        viewModelScope.launch {
+            combine(
+                RemoteControlManager.remoteServer,
+                mihomoController.runtimeState,
+                mihomoController.connections,
+            ) { remoteServer, runtimeState, connections ->
+                Triple(remoteServer, runtimeState, connections)
+            }.collect { (remoteServer, runtimeState, connections) ->
+                if (remoteServer == null) {
+                    if (runtimeState == MihomoRuntimeState.Running) {
+                        publishLocalConnections(connections)
+                    } else {
+                        updateState {
+                            copy(connections = emptyList(), allConnections = emptyList(), isLoading = false)
+                        }
+                    }
+                }
+            }
+        }
     }
 
     fun setVisible(visible: Boolean) {
-        _visibleCount.value += if (visible) 1 else -1
+        _visibleCount.value = (_visibleCount.value + if (visible) 1 else -1).coerceAtLeast(0)
     }
 
     override fun onCleared() {
@@ -161,9 +194,16 @@ class ConnectionsViewModel :
     }
 
     fun closeConnection(connectionId: String) {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                CommandTarget.standaloneClient().closeConnection(connectionId)
+                if (remoteServerId != null) {
+                    if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
+                    CommandTarget.standaloneClient().closeConnection(connectionId)
+                } else {
+                    if (RemoteControlManager.remoteServer.value != null) return@launch
+                    mihomoController.closeConnection(connectionId)
+                }
                 withContext(Dispatchers.Main) {
                     sendEvent(ConnectionsEvent.ConnectionClosed(connectionId))
                 }
@@ -174,9 +214,16 @@ class ConnectionsViewModel :
     }
 
     fun closeAllConnections() {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                CommandTarget.standaloneClient().closeConnections()
+                if (remoteServerId != null) {
+                    if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
+                    CommandTarget.standaloneClient().closeConnections()
+                } else {
+                    if (RemoteControlManager.remoteServer.value != null) return@launch
+                    mihomoController.closeAllConnections()
+                }
                 withContext(Dispatchers.Main) {
                     sendEvent(ConnectionsEvent.AllConnectionsClosed)
                 }
@@ -187,26 +234,33 @@ class ConnectionsViewModel :
     }
 
     override fun onConnected() {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Main) {
-            updateState { copy(isLoading = false) }
+            if (RemoteControlManager.remoteServer.value?.id == remoteServerId) {
+                updateState { copy(isLoading = false) }
+            }
         }
     }
 
     override fun onDisconnected() {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Default) {
             connectionsMutex.withLock {
                 connectionsStore = null
             }
             connectionsGeneration.incrementAndGet()
             withContext(Dispatchers.Main) {
-                updateState {
-                    copy(connections = emptyList(), allConnections = emptyList(), isLoading = false)
+                if (RemoteControlManager.remoteServer.value?.id == remoteServerId) {
+                    updateState {
+                        copy(connections = emptyList(), allConnections = emptyList(), isLoading = false)
+                    }
                 }
             }
         }
     }
 
     override fun writeConnectionEvents(events: ConnectionEvents) {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Default) {
             val generation = connectionsGeneration.get()
             val snapshot = connectionsMutex.withLock {
@@ -221,7 +275,10 @@ class ConnectionsViewModel :
                 return@launch
             }
             withContext(Dispatchers.Main) {
-                if (connectionsGeneration.get() != generation) {
+                if (
+                    connectionsGeneration.get() != generation ||
+                    RemoteControlManager.remoteServer.value?.id != remoteServerId
+                ) {
                     return@withContext
                 }
                 updateState {
@@ -236,6 +293,21 @@ class ConnectionsViewModel :
     }
 
     private fun requestConnectionsRefresh() {
+        if (RemoteControlManager.remoteServer.value == null) {
+            viewModelScope.launch(Dispatchers.Default) {
+                if (mihomoController.runtimeState.value == MihomoRuntimeState.Running) {
+                    publishLocalConnections(mihomoController.connections.value)
+                } else {
+                    withContext(Dispatchers.Main) {
+                        updateState {
+                            copy(connections = emptyList(), allConnections = emptyList(), isLoading = false)
+                        }
+                    }
+                }
+            }
+            return
+        }
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Default) {
             val generation = connectionsGeneration.get()
             val snapshot = connectionsMutex.withLock {
@@ -246,7 +318,10 @@ class ConnectionsViewModel :
                 return@launch
             }
             withContext(Dispatchers.Main) {
-                if (connectionsGeneration.get() != generation) {
+                if (
+                    connectionsGeneration.get() != generation ||
+                    RemoteControlManager.remoteServer.value?.id != remoteServerId
+                ) {
                     return@withContext
                 }
                 updateState {
@@ -283,6 +358,41 @@ class ConnectionsViewModel :
 
         return ConnectionLists(
             connections = connectionList,
+            allConnections = allConnectionList,
+        )
+    }
+
+    private suspend fun publishLocalConnections(connections: List<MihomoConnection>) {
+        val snapshot = buildLocalConnectionLists(connections, uiState.value)
+        withContext(Dispatchers.Main) {
+            if (RemoteControlManager.remoteServer.value == null) {
+                updateState {
+                    copy(
+                        connections = snapshot.connections,
+                        allConnections = snapshot.allConnections,
+                        isLoading = false,
+                    )
+                }
+            }
+        }
+    }
+
+    private fun buildLocalConnectionLists(
+        connections: List<MihomoConnection>,
+        currentState: ConnectionsUiState,
+    ): ConnectionLists {
+        val allConnectionList = connections.map(Connection::from)
+        val activeConnections = when (currentState.stateFilter) {
+            ConnectionStateFilter.Closed -> emptyList()
+            ConnectionStateFilter.All, ConnectionStateFilter.Active -> allConnectionList
+        }
+        val sortedConnections = when (currentState.sort) {
+            ConnectionSort.ByDate -> activeConnections.sortedByDescending { it.createdAt }
+            ConnectionSort.ByTraffic -> activeConnections.sortedByDescending { it.upload + it.download }
+            ConnectionSort.ByTrafficTotal -> activeConnections.sortedByDescending { it.uploadTotal + it.downloadTotal }
+        }
+        return ConnectionLists(
+            connections = sortedConnections.filter { it.performSearch(currentState.searchText) },
             allConnections = allConnectionList,
         )
     }

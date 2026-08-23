@@ -57,15 +57,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.nekohasekai.libbox.Libbox
-import io.nekohasekai.libbox.ProfileContent
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.component.qr.QRCodeDialog
 import io.nekohasekai.sfa.compose.util.QRCodeGenerator
 import io.nekohasekai.sfa.compose.util.RelativeTimeFormatter
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.ktx.shareProfile
+import io.nekohasekai.sfa.utils.MihomoProfileExport
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -165,7 +165,7 @@ fun ProfilePickerSheet(
     if (showQRCodeDialog && qrCodeProfile != null) {
         val profile = qrCodeProfile!!
         val link = remember(profile) {
-            Libbox.generateRemoteProfileImportLink(
+            MihomoProfileExport.remoteImportLink(
                 profile.name,
                 profile.typed.remoteURL,
             )
@@ -181,25 +181,6 @@ fun ProfilePickerSheet(
             },
         )
     }
-}
-
-private suspend fun createProfileContent(profile: Profile): ByteArray {
-    val content = ProfileContent()
-    content.name = profile.name
-    when (profile.typed.type) {
-        TypedProfile.Type.Local -> {
-            content.type = Libbox.ProfileTypeLocal
-        }
-        TypedProfile.Type.Remote -> {
-            content.type = Libbox.ProfileTypeRemote
-        }
-    }
-    content.config = java.io.File(profile.typed.path).readText()
-    content.remotePath = profile.typed.remoteURL
-    content.autoUpdate = profile.typed.autoUpdate
-    content.autoUpdateInterval = profile.typed.autoUpdateInterval
-    content.lastUpdated = profile.typed.lastUpdated.time
-    return content.encode()
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -231,12 +212,12 @@ private fun ProfilePickerRow(
     )
 
     val saveFileLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        contract = ActivityResultContracts.CreateDocument(MihomoProfileExport.CONTENT_TYPE),
     ) { uri ->
         if (uri != null) {
             coroutineScope.launch(Dispatchers.IO) {
                 try {
-                    val profileData = createProfileContent(profile)
+                    val profileData = MihomoProfileExport.read(profile)
                     context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                         outputStream.write(profileData)
                     }
@@ -372,79 +353,81 @@ private fun ProfilePickerRow(
                             },
                         )
 
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.menu_share)) },
-                            onClick = {
-                                expandedShareSubmenu = !expandedShareSubmenu
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Default.IosShare,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                )
-                            },
-                            trailingIcon = {
-                                Icon(
-                                    imageVector = if (expandedShareSubmenu) {
-                                        Icons.Default.ExpandLess
-                                    } else {
-                                        Icons.Default.ExpandMore
-                                    },
-                                    contentDescription = null,
-                                )
-                            },
-                        )
-
-                        if (expandedShareSubmenu) {
+                        if (profile.typed.core == ProfileCore.Mihomo) {
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.save_as_file)) },
+                                text = { Text(stringResource(R.string.menu_share)) },
                                 onClick = {
-                                    showMenu = false
-                                    saveFileLauncher.launch("${profile.name}.bpf")
-                                },
-                                leadingIcon = {
-                                    Icon(
-                                        imageVector = Icons.Default.Save,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(start = 24.dp),
-                                    )
-                                },
-                            )
-
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.share_as_file)) },
-                                onClick = {
-                                    showMenu = false
-                                    onShare()
+                                    expandedShareSubmenu = !expandedShareSubmenu
                                 },
                                 leadingIcon = {
                                     Icon(
                                         imageVector = Icons.Default.IosShare,
                                         contentDescription = null,
                                         tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.padding(start = 24.dp),
+                                    )
+                                },
+                                trailingIcon = {
+                                    Icon(
+                                        imageVector = if (expandedShareSubmenu) {
+                                            Icons.Default.ExpandLess
+                                        } else {
+                                            Icons.Default.ExpandMore
+                                        },
+                                        contentDescription = null,
                                     )
                                 },
                             )
 
-                            if (profile.typed.type == TypedProfile.Type.Remote) {
+                            if (expandedShareSubmenu) {
                                 DropdownMenuItem(
-                                    text = { Text(stringResource(R.string.profile_share_url)) },
+                                    text = { Text(stringResource(R.string.save_as_file)) },
                                     onClick = {
                                         showMenu = false
-                                        onShareURL()
+                                        saveFileLauncher.launch(MihomoProfileExport.fileName(profile.name))
                                     },
                                     leadingIcon = {
                                         Icon(
-                                            imageVector = Icons.Default.QrCode2,
+                                            imageVector = Icons.Default.Save,
                                             contentDescription = null,
                                             tint = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.padding(start = 24.dp),
                                         )
                                     },
                                 )
+
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.share_as_file)) },
+                                    onClick = {
+                                        showMenu = false
+                                        onShare()
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.IosShare,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(start = 24.dp),
+                                        )
+                                    },
+                                )
+
+                                if (profile.typed.type == TypedProfile.Type.Remote) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.profile_share_url)) },
+                                        onClick = {
+                                            showMenu = false
+                                            onShareURL()
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.QrCode2,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.padding(start = 24.dp),
+                                            )
+                                        },
+                                    )
+                                }
                             }
                         }
 

@@ -94,8 +94,6 @@ import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compat.WindowSizeClassCompat
 import io.nekohasekai.sfa.compat.isWidthAtLeastBreakpointCompat
-import io.nekohasekai.sfa.compose.component.RemoteControlMenuItems
-import io.nekohasekai.sfa.compose.component.rememberRemoteServers
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.utils.RemoteControlManager
@@ -128,7 +126,6 @@ fun LogScreen(
     val coroutineScope = rememberCoroutineScope()
     val resolvedTitle = title ?: stringResource(R.string.title_log)
     val remoteServer by RemoteControlManager.remoteServer.collectAsState()
-    val remoteServers by rememberRemoteServers()
     val emptyStateMessage = emptyMessage ?: stringResource(R.string.privilege_settings_hook_logs_empty)
 
     OverrideTopBar {
@@ -835,13 +832,6 @@ fun LogScreen(
                                 tint = MaterialTheme.colorScheme.error,
                             )
                         },
-                    )
-                }
-
-                if (showStatusInfo) {
-                    RemoteControlMenuItems(
-                        servers = remoteServers,
-                        onAction = { resolvedViewModel.toggleOptionsMenu() },
                     )
                 }
             }

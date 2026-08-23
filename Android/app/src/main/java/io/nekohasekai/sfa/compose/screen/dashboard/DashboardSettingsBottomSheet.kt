@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.outlined.Cloud
 import androidx.compose.material.icons.outlined.DataUsage
 import androidx.compose.material.icons.outlined.Info
-import androidx.compose.material.icons.outlined.NetworkCheck
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Public
 import androidx.compose.material.icons.outlined.Route
@@ -370,7 +369,6 @@ fun DashboardItemCard(
                     CardGroup.NetworkSettings -> Icons.Outlined.SettingsEthernet
                     CardGroup.ProxyMode -> Icons.Outlined.Tune
                     CardGroup.TrafficStats -> Icons.Outlined.DataUsage
-                    CardGroup.WebsiteTest -> Icons.Outlined.NetworkCheck
                     CardGroup.IPInfo -> Icons.Outlined.Public
                     CardGroup.ClashInfo -> Icons.Outlined.Info
                     CardGroup.SystemInfo -> Icons.Outlined.PhoneAndroid
@@ -403,7 +401,6 @@ fun DashboardItemCard(
                         CardGroup.NetworkSettings -> stringResource(R.string.dashboard_network_settings)
                         CardGroup.ProxyMode -> stringResource(R.string.dashboard_proxy_mode)
                         CardGroup.TrafficStats -> stringResource(R.string.dashboard_traffic_stats)
-                        CardGroup.WebsiteTest -> stringResource(R.string.dashboard_website_test)
                         CardGroup.IPInfo -> stringResource(R.string.dashboard_ip_info)
                         CardGroup.ClashInfo -> stringResource(R.string.dashboard_clash_info)
                         CardGroup.SystemInfo -> stringResource(R.string.dashboard_system_info)

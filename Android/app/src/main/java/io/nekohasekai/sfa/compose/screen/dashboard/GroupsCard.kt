@@ -193,8 +193,9 @@ fun SubscriptionNodesPanel(
     )
     val uiState by actualViewModel.uiState.collectAsState()
 
-    LaunchedEffect(serviceStatus) {
+    LaunchedEffect(serviceStatus, profile?.id) {
         actualViewModel.updateServiceStatus(serviceStatus)
+        profile?.id?.let(actualViewModel::refreshSelectedProfile)
     }
 
     val availableGroups = uiState.groups

@@ -3,13 +3,14 @@ package io.nekohasekai.sfa.compose.screen.profile
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import io.nekohasekai.libbox.Libbox
+import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.compat.ProfileCodeEditor
 import io.nekohasekai.sfa.compat.ProfileEditorColors
-import io.nekohasekai.sfa.config.ClashConfigNormalizer
+import io.nekohasekai.sfa.config.MihomoProfileContent
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
-import io.nekohasekai.sfa.ktx.unwrap
+import io.nekohasekai.sfa.mihomo.MihomoConfig
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
 import io.nekohasekai.sfa.utils.ProfileConfigStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -119,7 +120,8 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
             try {
                 _uiState.update { it.copy(isCheckingConfig = true) }
 
-                ClashConfigNormalizer.normalize(content)
+                val normalized = MihomoProfileContent.normalize(content)
+                MihomoRuntimeRepository.controller(Application.application).validateConfig(MihomoConfig(normalized))
 
                 // Configuration is valid, clear any error
                 _uiState.update {
@@ -185,7 +187,8 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
                         editor?.getText() ?: ""
                     }
 
-                val normalized = ClashConfigNormalizer.normalize(currentContent).content
+                val normalized = MihomoProfileContent.normalize(currentContent)
+                MihomoRuntimeRepository.controller(Application.application).validateConfig(MihomoConfig(normalized))
 
                 profile?.let { p ->
                     ProfileConfigStore.write(File(p.typed.path), normalized)
@@ -228,8 +231,7 @@ class EditProfileContentViewModel(private val profileId: Long, initialIsReadOnly
                     withContext(Dispatchers.Main) {
                         editor?.getText() ?: ""
                     }
-                val normalized = ClashConfigNormalizer.normalize(currentContent).content
-                val formatted = Libbox.formatConfig(normalized).unwrap
+                val formatted = MihomoProfileContent.normalize(currentContent)
 
                 if (formatted != currentContent) {
                     withContext(Dispatchers.Main) {

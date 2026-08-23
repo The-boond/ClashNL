@@ -6,7 +6,6 @@ import androidx.compose.material.icons.automirrored.filled.TextSnippet
 import androidx.compose.material.icons.filled.Dashboard
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
-import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material.icons.filled.VpnKey
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.nekohasekai.sfa.R
@@ -40,12 +39,6 @@ sealed class Screen(val route: String, @StringRes val titleRes: Int, val icon: I
         route = "connections",
         titleRes = R.string.title_connections,
         icon = Icons.Default.SwapVert,
-    )
-
-    object Tools : Screen(
-        route = "tools",
-        titleRes = R.string.title_tools,
-        icon = Icons.Default.Terminal,
     )
 
     object Settings : Screen(

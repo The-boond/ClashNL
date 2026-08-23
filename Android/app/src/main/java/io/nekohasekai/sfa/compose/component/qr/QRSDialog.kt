@@ -56,6 +56,7 @@ import io.nekohasekai.sfa.compat.WindowSizeClassCompat
 import io.nekohasekai.sfa.compat.isWidthAtLeastBreakpointCompat
 import io.nekohasekai.sfa.qrs.QRSConstants
 import io.nekohasekai.sfa.qrs.QRSEncoder
+import io.nekohasekai.sfa.utils.MihomoProfileExport
 import kotlinx.coroutines.delay
 
 @Composable
@@ -71,8 +72,8 @@ fun QRSDialog(profileData: ByteArray, profileName: String, onDismiss: () -> Unit
     val dataWithMeta = remember(profileData, profileName) {
         QRSEncoder.appendFileHeaderMeta(
             data = profileData,
-            filename = "$profileName.bpf",
-            contentType = "application/octet-stream",
+            filename = MihomoProfileExport.fileName(profileName),
+            contentType = MihomoProfileExport.CONTENT_TYPE,
         )
     }
     val requiredFrames = remember(dataWithMeta, sliceSize) {

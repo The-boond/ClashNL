@@ -1,11 +1,10 @@
 package io.nekohasekai.sfa.utils
 
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.BuildConfig
 
 object CoreVersion {
     fun current(): String = display(
-        embeddedVersion = runCatching { Libbox.version() }.getOrNull(),
+        embeddedVersion = null,
         pinnedVersion = BuildConfig.CORE_VERSION,
     )
 

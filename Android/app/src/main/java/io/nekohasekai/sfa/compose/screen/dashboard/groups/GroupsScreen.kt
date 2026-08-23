@@ -50,11 +50,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.model.Group
 import io.nekohasekai.sfa.compose.model.GroupItem
 import io.nekohasekai.sfa.constant.Status
+import io.nekohasekai.sfa.utils.proxyDisplayType
 
 @Composable
 fun GroupsScreen(
@@ -156,7 +156,7 @@ private fun ProxyGroupCard(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Text(
-                                    text = Libbox.proxyDisplayType(group.type),
+                                    text = proxyDisplayType(group.type),
                                     style = MaterialTheme.typography.titleSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
@@ -373,7 +373,7 @@ private fun ProxyChip(item: GroupItem, isSelected: Boolean, isSelectable: Boolea
                 ) {
                     // Type
                     Text(
-                        text = Libbox.proxyDisplayType(item.type),
+                        text = proxyDisplayType(item.type),
                         style = MaterialTheme.typography.labelSmall,
                         color =
                         if (isSelected) {

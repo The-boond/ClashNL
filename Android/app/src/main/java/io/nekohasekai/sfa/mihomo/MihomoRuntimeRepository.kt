@@ -8,6 +8,6 @@ object MihomoRuntimeRepository {
     private var instance: MihomoController? = null
 
     fun controller(context: Context): MihomoController = instance ?: synchronized(this) {
-        instance ?: AndroidMihomoController(context.applicationContext).also { instance = it }
+        instance ?: AndroidMihomoController.create(context.applicationContext).also { instance = it }
     }
 }

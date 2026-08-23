@@ -36,6 +36,16 @@ class LatencyRepositoryTest {
     }
 
     @Test
+    fun cacheHitRequiresTheSameRuntimeSource() {
+        val offlineTarget = target(network = "wifi:1")
+        LatencyRepository.put(success(offlineTarget, testedAt = 1_000L))
+        val liveTarget = offlineTarget.copy(source = LatencyResultSource.LIVE_CORE)
+
+        assertNull(LatencyRepository.getFresh(liveTarget, now = 1_100L))
+        assertEquals(1_000L, LatencyRepository.getFresh(offlineTarget, now = 1_100L)?.testedAt)
+    }
+
+    @Test
     fun networkChangeMarksPreviousResultsExpired() {
         val target = target(network = "wifi:1")
         LatencyRepository.put(success(target, testedAt = 5_000L))
