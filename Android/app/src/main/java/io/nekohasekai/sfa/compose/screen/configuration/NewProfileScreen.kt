@@ -68,7 +68,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.base.SelectableMessageDialog
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
-import io.nekohasekai.sfa.database.ProfileCore
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -524,44 +523,6 @@ fun NewProfileScreen(
                                 }
                             },
                         )
-
-                        Text(
-                            text = stringResource(R.string.profile_core),
-                            style = MaterialTheme.typography.bodyLarge,
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            OutlinedButton(
-                                onClick = { viewModel.updateRemoteCore(ProfileCore.SingBox) },
-                                modifier = Modifier.weight(1f),
-                                colors = if (uiState.remoteCore == ProfileCore.SingBox) {
-                                    ButtonDefaults.outlinedButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    )
-                                } else {
-                                    ButtonDefaults.outlinedButtonColors()
-                                },
-                            ) {
-                                Text(stringResource(R.string.profile_core_sing_box))
-                            }
-                            OutlinedButton(
-                                onClick = { viewModel.updateRemoteCore(ProfileCore.Mihomo) },
-                                modifier = Modifier.weight(1f),
-                                colors = if (uiState.remoteCore == ProfileCore.Mihomo) {
-                                    ButtonDefaults.outlinedButtonColors(
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    )
-                                } else {
-                                    ButtonDefaults.outlinedButtonColors()
-                                },
-                            ) {
-                                Text(stringResource(R.string.profile_core_mihomo))
-                            }
-                        }
 
                         Text(
                             text = stringResource(R.string.profile_core_mihomo_hint),

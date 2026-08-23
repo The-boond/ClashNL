@@ -42,7 +42,7 @@ object LatencyRepository {
     }
 
     fun getFresh(target: LatencyTarget, now: Long = System.currentTimeMillis()): NodeLatencyResult? = synchronized(access) {
-        values[target.key]?.takeIf { it.isFresh(now) }
+        values[target.key]?.takeIf { it.source == target.source && it.isFresh(now) }
     }
 
     fun getForDisplay(

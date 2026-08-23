@@ -42,12 +42,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compat.rememberOverscrollEffectCompat
 import io.nekohasekai.sfa.compat.verticalScrollCompat
 import io.nekohasekai.sfa.compose.model.Connection
 import io.nekohasekai.sfa.compose.util.rememberSheetDismissFromContentOnlyIfGestureStartedAtTopModifier
+import io.nekohasekai.sfa.utils.formatBytes
+import io.nekohasekai.sfa.utils.formatDuration
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -148,16 +149,16 @@ fun ConnectionDetailsScreen(
                 )
                 DetailRow(
                     label = stringResource(R.string.connection_duration),
-                    value = Libbox.formatDuration(connection.closedAt - connection.createdAt),
+                    value = formatDuration(connection.closedAt - connection.createdAt),
                 )
             }
             DetailRow(
                 label = stringResource(R.string.connection_uplink),
-                value = Libbox.formatBytes(connection.uploadTotal),
+                value = formatBytes(connection.uploadTotal),
             )
             DetailRow(
                 label = stringResource(R.string.connection_downlink),
-                value = Libbox.formatBytes(connection.downloadTotal),
+                value = formatBytes(connection.downloadTotal),
             )
         }
 

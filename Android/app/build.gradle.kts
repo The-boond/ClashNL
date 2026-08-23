@@ -53,9 +53,6 @@ fun getVersionProps(propName: String): String {
     return ""
 }
 
-fun quotedBuildConfigValue(value: String): String =
-    "\"${value.replace("\\", "\\\\").replace("\"", "\\\"")}\""
-
 android {
     namespace = "io.nekohasekai.sfa"
     compileSdk = 37
@@ -77,13 +74,6 @@ android {
         versionCode = getVersionProps("VERSION_CODE").toInt()
         versionName = getVersionProps("VERSION_NAME")
         buildConfigField("String", "CORE_VERSION", "\"${getVersionProps("CORE_VERSION")}\"")
-        val accountApiBaseUrl =
-            getProps("ACCOUNT_API_BASE_URL").ifBlank { "https://nlnex.com" }
-        buildConfigField(
-            "String",
-            "ACCOUNT_API_BASE_URL",
-            quotedBuildConfigValue(accountApiBaseUrl.trimEnd('/')),
-        )
         base.archivesName.set("ClashNl-Android-${versionName}")
     }
 
@@ -169,6 +159,10 @@ android {
     packaging {
         jniLibs {
             useLegacyPackaging = true
+            // Mihomo embeds its own Go runtime. Shipping libbox.so would leave a
+            // second Go runtime available to load into the same Android process,
+            // which is unsupported and caused reproducible native crashes on ARM64.
+            excludes += "**/libbox.so"
         }
     }
 
@@ -360,6 +354,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
     "androidTestPlayImplementation"(composeBom24)
     "androidTestOtherImplementation"(composeBom24)
     "androidTestOtherLegacyImplementation"(composeBom21)

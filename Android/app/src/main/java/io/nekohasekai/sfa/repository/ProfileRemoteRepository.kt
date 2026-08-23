@@ -1,13 +1,9 @@
 package io.nekohasekai.sfa.repository
 
 import io.nekohasekai.sfa.database.Profile
-import io.nekohasekai.sfa.database.ProfileCore
 
 /**
- * Routes remote subscription I/O by the core that owns the profile file.
- *
- * Keeping this decision beside the stored profile prevents a generic refresh
- * path from normalizing a Mihomo YAML response as sing-box JSON.
+ * Owns remote subscription I/O for the single Mihomo runtime.
  */
 object ProfileRemoteRepository {
     data class FetchResult(
@@ -20,23 +16,47 @@ object ProfileRemoteRepository {
         val metadata: SubscriptionMetadata?,
     )
 
-    fun fetch(core: ProfileCore, url: String): FetchResult = when (core) {
-        ProfileCore.SingBox -> RemoteProfileRepository.fetchNormalized(url).let {
-            FetchResult(it.content, it.metadata)
-        }
+    data class SaveResult(
+        val profile: Profile,
+        val contentChanged: Boolean,
+        val remoteUrlChanged: Boolean,
+    )
 
-        ProfileCore.Mihomo -> MihomoRemoteProfileRepository.fetch(url).let {
-            FetchResult(it.content, it.metadata)
+    fun fetch(url: String): FetchResult = MihomoRemoteProfileRepository.fetch(url).let {
+        FetchResult(it.content, it.metadata)
+    }
+
+    suspend fun update(profile: Profile): UpdateResult {
+        require(profile.typed.core == io.nekohasekai.sfa.database.ProfileCore.Mihomo) {
+            "此版本仅支持 Mihomo 配置，请重新导入 Clash/Mihomo YAML 订阅"
+        }
+        return MihomoRemoteProfileRepository.update(profile).let {
+            UpdateResult(it.contentChanged, it.metadata)
         }
     }
 
-    suspend fun update(profile: Profile): UpdateResult = when (profile.typed.core) {
-        ProfileCore.SingBox -> RemoteProfileRepository.update(profile).let {
-            UpdateResult(it.contentChanged, it.metadata)
+    suspend fun saveRemoteProfile(
+        profileId: Long,
+        expectedRemoteUrl: String,
+        name: String,
+        icon: String?,
+        remoteUrl: String,
+        autoUpdate: Boolean,
+        autoUpdateInterval: Int,
+    ): SaveResult = MihomoRemoteProfileRepository
+        .saveRemoteProfile(
+            profileId = profileId,
+            expectedRemoteUrl = expectedRemoteUrl,
+            name = name,
+            icon = icon,
+            remoteUrl = remoteUrl,
+            autoUpdate = autoUpdate,
+            autoUpdateInterval = autoUpdateInterval,
+        ).let {
+            SaveResult(
+                profile = it.profile,
+                contentChanged = it.contentChanged,
+                remoteUrlChanged = it.remoteUrlChanged,
+            )
         }
-
-        ProfileCore.Mihomo -> MihomoRemoteProfileRepository.update(profile).let {
-            UpdateResult(it.contentChanged, it.metadata)
-        }
-    }
 }

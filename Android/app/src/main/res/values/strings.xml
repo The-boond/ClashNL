@@ -1,9 +1,6 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="profile_core">Core</string>
-    <string name="profile_core_sing_box">sing-box</string>
-    <string name="profile_core_mihomo">Mihomo</string>
-    <string name="profile_core_mihomo_hint">Choose Mihomo only for Clash/Mihomo YAML subscriptions. Existing profiles remain on sing-box.</string>
+    <string name="profile_core_mihomo_hint">Subscriptions use the Mihomo core and accept Clash/Mihomo YAML only.</string>
     <!-- App -->
     <string name="app_name" translatable="false">ClashNl</string>
     <string name="app_version_title">App version</string>
@@ -66,63 +63,6 @@
     <string name="title_log">Logs</string>
     <string name="title_settings">Settings</string>
     <string name="title_app_settings">App</string>
-    <string name="account_title">Account &amp; plan</string>
-    <string name="account_settings_summary">Sign in, view your plan, and sync your subscription</string>
-    <string name="account_login_heading">Sign in to ClashNL</string>
-    <string name="account_login_description">Use your existing service account. Your purchased plan and subscription will sync automatically.</string>
-    <string name="account_email">Email</string>
-    <string name="account_password">Password</string>
-    <string name="account_login_action">Sign in and sync</string>
-    <string name="account_security_hint">Your password is used only for this login request. The resulting session token is protected by Android Keystore.</string>
-    <string name="account_no_plan">No active plan</string>
-    <string name="account_usage_value">Used %1$s / %2$s</string>
-    <string name="account_expired">Plan expired</string>
-    <string name="account_expiry">Expires</string>
-    <string name="account_device_limit">Device limit</string>
-    <string name="account_speed_limit">Speed limit</string>
-    <string name="account_speed_value">%1$d Mbps</string>
-    <string name="account_unlimited">Unlimited</string>
-    <string name="account_subscription_sync">Subscription</string>
-    <string name="account_subscription_synced">Synced to the subscription list</string>
-    <string name="account_subscription_pending">Waiting to sync</string>
-    <string name="account_refresh_action">Refresh account and subscription</string>
-    <string name="account_retry_action">Retry</string>
-    <string name="account_logout_action">Sign out</string>
-    <string name="account_logout_profile_hint">Signing out clears the saved account session. The most recently synced local profile remains available on this device.</string>
-    <string name="account_manage_plans_action">Buy, renew or change plan</string>
-    <string name="account_plans_title">Plans and payment</string>
-    <string name="account_plan">Subscription plan</string>
-    <string name="account_plan_details">Plan details</string>
-    <string name="account_choose_plan">Choose a plan</string>
-    <string name="account_plan_description">Description</string>
-    <string name="account_available_periods">Available billing cycles</string>
-    <string name="account_plan_sold_out">Sold out</string>
-    <string name="account_plan_unavailable">Purchasing is currently unavailable</string>
-    <string name="account_device_value">%1$d devices</string>
-    <string name="account_device_unlimited">Unlimited devices</string>
-    <string name="account_period_price">%1$s · %2$s</string>
-    <string name="account_period_month">Monthly</string>
-    <string name="account_period_quarter">Quarterly</string>
-    <string name="account_period_half_year">Half-year</string>
-    <string name="account_period_year">Yearly</string>
-    <string name="account_period_two_years">Two years</string>
-    <string name="account_period_three_years">Three years</string>
-    <string name="account_period_onetime">One-time</string>
-    <string name="account_period_reset">Traffic reset</string>
-    <string name="account_confirm_purchase">Confirm order</string>
-    <string name="account_payment_method">Payment method</string>
-    <string name="account_payment_fee">Fee: %1$s + %2$.2f%%</string>
-    <string name="account_purchase_notice">An order is created only after confirmation. Finish payment in the secure cashier, then return here to check its status.</string>
-    <string name="account_create_and_pay">Create order and pay</string>
-    <string name="account_pending_order">Pending payment</string>
-    <string name="account_trade_no">Order: %1$s</string>
-    <string name="account_check_payment">Check payment</string>
-    <string name="account_cancel_order">Cancel order</string>
-    <string name="account_continue_payment">Continue payment</string>
-    <string name="account_open_cashier">Open cashier</string>
-    <string name="account_checkout_invalid_url">The cashier returned an invalid HTTPS address.</string>
-    <string name="account_checkout_unknown_type">Unsupported cashier response type: %1$d</string>
-    <string name="account_no_expiry">No expiry</string>
     <string name="title_new_profile">New Profile</string>
     <string name="title_edit_profile">Edit Profile</string>
     <string name="title_edit_configuration">Edit Configuration</string>
@@ -152,6 +92,13 @@
     <string name="proxy_mode_global">Global</string>
     <string name="mode">Mode</string>
     <string name="system_proxy">System Proxy</string>
+    <string name="network_mode">Network mode</string>
+    <string name="network_mode_virtual_nic">Virtual NIC</string>
+    <string name="network_mode_virtual_nic_description">Routes IPv4, IPv6, and DNS through Mihomo. Recommended for complete device traffic coverage.</string>
+    <string name="network_mode_system_proxy">System proxy</string>
+    <string name="network_mode_system_proxy_description">Publishes Mihomo as Android’s HTTP proxy. Only apps that honor the system proxy are covered; other protocols use the physical network.</string>
+    <string name="network_mode_system_proxy_unavailable">System proxy mode requires Android 10 or newer.</string>
+    <string name="network_mode_stop_before_change">Stop the service before changing the network mode.</string>
     <string name="url_test">Speed test</string>
     <string name="url_test_running">Testing…</string>
     <string name="nodes_start_vpn_hint">Select a node or test experience latency</string>
@@ -202,7 +149,6 @@
     <string name="dashboard_normal_mode">Proxy</string>
     <string name="dashboard_open_subscriptions">Open subscriptions</string>
     <string name="dashboard_open_proxies">Open proxies</string>
-    <string name="dashboard_open_settings">Open settings</string>
     <string name="dashboard_open_test">Open test</string>
     <string name="dashboard_start_to_view_mode">Start the service to view and change proxy mode.</string>
     <string name="dashboard_connections">Connections (in / out)</string>
@@ -280,7 +226,7 @@
     <string name="profile_import_file">Import File</string>
     <string name="profile_create">Create</string>
     <string name="profile_fetching_subscription">Fetching and validating subscription…</string>
-    <string name="profile_url_format_hint">sing-box JSON / Clash/Mihomo YAML</string>
+    <string name="profile_url_format_hint">Clash/Mihomo YAML</string>
     <string name="profile_share_url">Share URL as QR Code</string>
     <string name="profile_input_required">Required</string>
     <string name="profile_update">Update</string>
@@ -311,8 +257,6 @@
     <string name="view_configuration">View Configuration</string>
     <string name="save_as_file">Save As File</string>
     <string name="share_as_file">Share As File</string>
-    <string name="save_content_json">Save Content JSON File</string>
-    <string name="share_content_json">Share Content JSON File</string>
     <string name="unsaved_changes">Unsaved Changes</string>
     <string name="unsaved_changes_message">You have unsaved changes. Do you want to discard them?</string>
     <string name="import_profile_confirm_title">Import Profile</string>
@@ -344,7 +288,6 @@
     <string name="core_data_size">Data Size</string>
     <string name="about">About</string>
     <string name="source_code">Source Code</string>
-    <string name="sponsor">Sponsor</string>
     <string name="working_directory">Working Directory</string>
     <string name="beta_settings">Beta Settings</string>
     <string name="disable_deprecated_warnings">Disable Deprecated Warnings</string>
@@ -411,10 +354,10 @@
     <string name="background_permission_description">Apply for the necessary permissions in order for the VPN to function properly.\n\nIf you are using a device made by a Chinese company, the card may not disappear after the permission is granted.</string>
     <string name="request_background_permission">Ignore</string>
     <string name="location_permission_title">Location permission</string>
-    <string name="location_permission_description">Your profile contains &lt;strong&gt;&lt;tt&gt;wifi_ssid&lt;/tt&gt; or &lt;tt&gt;wifi_bssid&lt;/tt&gt; routing rules&lt;/strong&gt;. To make them work, sing-box uses the &lt;strong&gt;location&lt;/strong&gt; permission &lt;strong&gt;in the background&lt;/strong&gt; to get information about the connected Wi-Fi network. The information will be used &lt;strong&gt;for routing purposes only&lt;/strong&gt;.</string>
+    <string name="location_permission_description">Your profile contains Wi-Fi-based routing rules. To make them work, Mihomo uses the &lt;strong&gt;location&lt;/strong&gt; permission &lt;strong&gt;in the background&lt;/strong&gt; to get information about the connected Wi-Fi network. The information will be used &lt;strong&gt;for routing purposes only&lt;/strong&gt;.</string>
     <string name="location_permission_background_description">On Android 10 and up, &lt;strong&gt;background location&lt;/strong&gt; permission is required. Select &lt;strong&gt;Allow all the time&lt;/strong&gt; to grant the permission.</string>
     <string name="notification_permission_title">Notification permission</string>
-    <string name="notification_permission_required_description">sing-box is unable to show real-time network speeds without the permission to send notifications. Please grant the permission or disable real-time network speeds notification before starting the service.</string>
+    <string name="notification_permission_required_description">Mihomo is unable to show real-time network speeds without the permission to send notifications. Please grant the permission or disable real-time network speeds notification before starting the service.</string>
     <string name="root_access_required">Root access required</string>
     <string name="root_access_denied">Root access denied</string>
 
@@ -506,7 +449,7 @@
     <string name="error_empty_configuration">Empty configuration</string>
     <string name="error_empty_file">Empty file</string>
     <string name="error_decode_profile">Failed to decode profile: %s</string>
-    <string name="error_invalid_configuration">Invalid sing-box configuration: %s</string>
+    <string name="error_invalid_configuration">Invalid Mihomo configuration: %s</string>
     <string name="error_start_command_server">Start command server</string>
     <string name="error_create_service">Create service</string>
     <string name="error_start_service">Start service</string>
@@ -726,7 +669,7 @@
     <string name="oom_report_kill_connections_description">Kill all connections to free memory when the service memory exceeds the limit.</string>
 
     <!-- Xposed Module -->
-    <string name="xposed_description">Privileged Enhancement for sing-box</string>
+    <string name="xposed_description">Privileged Enhancement for Mihomo</string>
 
     <!-- Privileged Enhancement -->
     <string name="privilege_module_title">Privilege modules</string>

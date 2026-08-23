@@ -6,7 +6,10 @@ data class MihomoConfig(
 
 data class MihomoStartRequest(
     val config: MihomoConfig,
+    /** App-owned loopback HTTP proxy port. Null preserves the live port on reload. */
+    val httpProxyPort: Int? = null,
     val tun: MihomoTunDevice? = null,
+    val tunFactory: (suspend () -> MihomoTunDevice)? = null,
 )
 
 data class MihomoTunDevice(
@@ -62,4 +65,21 @@ data class MihomoConnection(
     val chains: List<String>,
     val upload: Long,
     val download: Long,
+    val type: String = "",
+    val sourceIp: String = "",
+    val destinationIp: String = "",
+    val sourcePort: String = "",
+    val destinationPort: String = "",
+    val inboundName: String = "",
+    val inboundUser: String = "",
+    val process: String = "",
+    val processPath: String = "",
+    val start: String = "",
+    val rule: String = "",
+    val rulePayload: String = "",
+)
+
+data class MihomoLogEntry(
+    val level: String,
+    val message: String,
 )

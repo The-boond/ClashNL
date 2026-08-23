@@ -60,7 +60,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
 import androidx.navigation.NavController
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.base.SelectableMessageDialog
 import io.nekohasekai.sfa.compose.base.UiEvent
@@ -73,6 +72,7 @@ import io.nekohasekai.sfa.utils.HookModuleUpdateNotifier
 import io.nekohasekai.sfa.utils.HookStatusClient
 import io.nekohasekai.sfa.utils.PrivilegeSettingsClient
 import io.nekohasekai.sfa.utils.VpnDetectionTest
+import io.nekohasekai.sfa.utils.formatBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -266,7 +266,7 @@ fun PrivilegeSettingsScreen(navController: NavController, serviceStatus: Status 
             text = {
                 val file = exportedFile
                 if (file != null) {
-                    Text(stringResource(R.string.privilege_settings_export_debug_message, Libbox.formatBytes(file.length())))
+                    Text(stringResource(R.string.privilege_settings_export_debug_message, formatBytes(file.length())))
                 }
             },
             confirmButton = {
@@ -451,7 +451,7 @@ fun PrivilegeSettingsScreen(navController: NavController, serviceStatus: Status 
                                 }
                                 val timestamp =
                                     SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                                val outZip = File(exportBase, "sing-box-lsposed-debug-$timestamp.zip")
+                                val outZip = File(exportBase, "clashnl-lsposed-debug-$timestamp.zip")
                                 exportCancelled = false
                                 exportError = null
                                 showExportProgressDialog = true

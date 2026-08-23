@@ -6,7 +6,6 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.database.Profile
@@ -202,32 +201,59 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
             _uiState.update { it.copy(isSaving = true) }
 
             try {
-                // Update profile object
-                profile.name = state.name
-                profile.icon = state.icon
-                profile.typed.remoteURL = state.remoteUrl
+                val savedProfile: Profile
+                var contentChanged = false
+                var remoteUrlChanged = false
+                if (profile.typed.type == TypedProfile.Type.Remote) {
+                    val result =
+                        ProfileRemoteRepository.saveRemoteProfile(
+                            profileId = profile.id,
+                            expectedRemoteUrl = state.originalRemoteUrl,
+                            name = state.name,
+                            icon = state.icon,
+                            remoteUrl = state.remoteUrl,
+                            autoUpdate = state.autoUpdate,
+                            autoUpdateInterval = state.autoUpdateInterval,
+                        )
+                    savedProfile = result.profile
+                    contentChanged = result.contentChanged
+                    remoteUrlChanged = result.remoteUrlChanged
+                } else {
+                    profile.name = state.name
+                    profile.icon = state.icon
+                    check(ProfileManager.update(profile) == 1) { "Profile no longer exists" }
+                    savedProfile = profile
+                }
 
-                // Handle auto-update changes
-                val autoUpdateChanged = state.autoUpdate != state.originalAutoUpdate
-                profile.typed.autoUpdate = state.autoUpdate
-                profile.typed.autoUpdateInterval = state.autoUpdateInterval
-
-                // Save to database
-                ProfileManager.update(profile)
-
-                // Reconfigure updater if auto-update was enabled
-                if (autoUpdateChanged && state.autoUpdate) {
+                val updateScheduleChanged =
+                    profile.typed.type == TypedProfile.Type.Remote &&
+                        (
+                            state.autoUpdate != state.originalAutoUpdate ||
+                                state.autoUpdateInterval != state.originalAutoUpdateInterval ||
+                                (remoteUrlChanged && state.autoUpdate)
+                            )
+                if (updateScheduleChanged) {
                     UpdateProfileWork.reconfigureUpdater()
+                }
+                if (contentChanged && savedProfile.id == Settings.selectedProfile) {
+                    runCatching { ProfileRuntime.reloadSelectedIfRunning(getApplication()) }
                 }
 
                 // Update UI state with new original values
                 _uiState.update {
                     it.copy(
-                        originalName = state.name,
-                        originalIcon = state.icon,
-                        originalRemoteUrl = state.remoteUrl,
-                        originalAutoUpdate = state.autoUpdate,
-                        originalAutoUpdateInterval = state.autoUpdateInterval,
+                        profile = savedProfile,
+                        name = savedProfile.name,
+                        originalName = savedProfile.name,
+                        icon = savedProfile.icon,
+                        originalIcon = savedProfile.icon,
+                        remoteUrl = savedProfile.typed.remoteURL,
+                        originalRemoteUrl = savedProfile.typed.remoteURL,
+                        autoUpdate = savedProfile.typed.autoUpdate,
+                        originalAutoUpdate = savedProfile.typed.autoUpdate,
+                        autoUpdateInterval = savedProfile.typed.autoUpdateInterval,
+                        originalAutoUpdateInterval = savedProfile.typed.autoUpdateInterval,
+                        lastUpdated = savedProfile.typed.lastUpdated,
                         hasChanges = false,
                         isSaving = false,
                     )
@@ -310,7 +336,7 @@ class EditProfileViewModel(application: Application) : AndroidViewModel(applicat
 
             val content = configFile.readText()
             val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            val fileName = "${profile.name.replace(" ", "_")}_$timestamp.json"
+            val fileName = "${profile.name.replace(" ", "_")}_$timestamp.yaml"
 
             // Store content for later when user picks location
             pendingExportContent = content

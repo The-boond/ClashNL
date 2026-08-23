@@ -1,33 +1,38 @@
 # ClashNL
 
-项目已经按平台拆分为两个自包含工程：
-
-```text
-Android/    Android VpnService 客户端、Libbox 构建脚本、转换器和示例
-iOS/        iOS/macOS/tvOS Apple 客户端、Xcode 工程、Libbox 脚本和示例
-```
+ClashNL 是以 Mihomo 为核心的 Android 代理客户端。`v1.1.0` 起，Android
+版本不再包含账户登录、套餐购买或账户同步模块，直接管理本地配置与
+Clash/Mihomo YAML 订阅。
 
 ## Android
 
-进入 [Android/README.md](Android/README.md)。
+工程位于 [`Android/`](Android/)，主要能力包括：
+
+- 原生 Mihomo 单核运行时
+- Clash/Mihomo YAML 订阅导入、更新与校验
+- VPN 停止时选择节点、进行延迟测试和预选规则/全局/直连模式
+- Android 系统代理与完整虚拟网卡两种网络模式
+- IPv4、IPv6、DNS、分应用代理与连接/流量查看
+
+构建 Debug APK：
 
 ```powershell
-cd D:\Desktop\iosClashNL\Android
+cd Android
 .\gradlew.bat :app:assembleOtherDebug
 ```
 
-## iOS
+构建正式签名 APK：
 
-进入 [iOS/README.md](iOS/README.md)。
-
-```bash
-cd iOS
-bash scripts/verify-core.sh
-bash scripts/build-libbox.sh
-open sing-box.xcodeproj
+```powershell
+.\gradlew.bat :app:assembleOtherRelease
 ```
 
-两个平台各自保存 `Core/`、`Examples/`、`scripts/`、隐私说明和品牌源图，
-因此可以单独复制、构建和维护。仓库根目录只保留版本控制、CI、总览和总许可证。
+更多说明见 [`Android/README.md`](Android/README.md)。
 
-代码按 [GPL-3.0-or-later](LICENSE) 分发。
+## Apple 平台
+
+iOS、macOS 与 tvOS 工程保留在 [`iOS/`](iOS/)，与 Android 工程独立维护。
+
+## 许可证
+
+项目按 [GPL-3.0-or-later](LICENSE) 分发。

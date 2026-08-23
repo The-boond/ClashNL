@@ -1,18 +1,24 @@
 package io.nekohasekai.sfa.compose.screen.dashboard
 
+import android.os.Build
 import androidx.lifecycle.viewModelScope
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.sfa.Application
+import io.nekohasekai.sfa.R
+import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.compose.base.BaseViewModel
-import io.nekohasekai.sfa.compose.base.GlobalEventBus
 import io.nekohasekai.sfa.compose.base.UiEvent
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
+import io.nekohasekai.sfa.mihomo.MihomoNetworkMode
+import io.nekohasekai.sfa.mihomo.MihomoProxyGroup
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeState
+import io.nekohasekai.sfa.mihomo.MihomoTraffic
 import io.nekohasekai.sfa.repository.ProfileRemoteRepository
 import io.nekohasekai.sfa.runtime.ProfileRuntime
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
@@ -20,7 +26,10 @@ import io.nekohasekai.sfa.utils.CommandClient
 import io.nekohasekai.sfa.utils.CommandTarget
 import io.nekohasekai.sfa.utils.HTTPClient
 import io.nekohasekai.sfa.utils.RemoteControlManager
+import io.nekohasekai.sfa.utils.formatBytes
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,12 +37,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
-import java.io.File
 import java.util.Collections
-import java.util.Date
+import java.util.concurrent.atomic.AtomicLong
 
 enum class CardGroup {
     Subscriptions,
@@ -41,7 +51,6 @@ enum class CardGroup {
     NetworkSettings,
     ProxyMode,
     TrafficStats,
-    WebsiteTest,
     IPInfo,
     ClashInfo,
     SystemInfo,
@@ -49,6 +58,7 @@ enum class CardGroup {
 
 val configurableDashboardCards =
     listOf(
+        CardGroup.NetworkSettings,
         CardGroup.ProxyMode,
         CardGroup.TrafficStats,
     )
@@ -91,9 +101,11 @@ data class DashboardUiState(
     val uplinkHistory: List<Float> = List(30) { 0f },
     val downlinkHistory: List<Float> = List(30) { 0f },
     // Clash Mode
-    val clashModeVisible: Boolean = false,
-    val clashModes: List<String> = emptyList(),
-    val selectedClashMode: String = "",
+    val clashModeVisible: Boolean = true,
+    val clashModes: List<String> = listOf("rule", "global", "direct"),
+    val selectedClashMode: String = "rule",
+    // Network mode
+    val networkMode: MihomoNetworkMode = MihomoNetworkMode.VirtualNic,
     // System Proxy
     val systemProxyVisible: Boolean = false,
     val systemProxyEnabled: Boolean = false,
@@ -111,12 +123,43 @@ data class DashboardUiState(
         configurableDashboardCards,
     val cardWidths: Map<CardGroup, CardWidth> =
         mapOf(
+            CardGroup.NetworkSettings to CardWidth.Full,
             CardGroup.ProxyMode to CardWidth.Full,
             CardGroup.TrafficStats to CardWidth.Full,
         ),
     val showCardSettingsDialog: Boolean = false,
 ) {
     data class DeprecatedNote(val message: String, val migrationLink: String?)
+}
+
+internal data class DashboardProxySelection(
+    val group: String,
+    val node: String,
+)
+
+internal fun dashboardProxySelection(
+    mode: String,
+    groups: List<MihomoProxyGroup>,
+): DashboardProxySelection? {
+    val groupsByName = groups.associateBy { it.name }
+    val root = when (mode.lowercase()) {
+        "direct" -> return DashboardProxySelection("DIRECT", "DIRECT")
+        "global" -> groupsByName["GLOBAL"]
+        else -> groups.firstOrNull {
+            it.name != "GLOBAL" && it.selectable && it.selected.isNotBlank()
+        } ?: groups.firstOrNull {
+            it.name != "GLOBAL" && it.selected.isNotBlank()
+        }
+    } ?: return null
+
+    var node = root.selected
+    val visited = mutableSetOf(root.name)
+    while (node.isNotBlank()) {
+        val nested = groupsByName[node] ?: break
+        if (!visited.add(nested.name) || nested.selected.isBlank()) break
+        node = nested.selected
+    }
+    return node.takeIf(String::isNotBlank)?.let { DashboardProxySelection(root.name, it) }
 }
 
 // DashboardViewModel now only uses UiEvent for all events
@@ -127,6 +170,7 @@ class DashboardViewModel :
     CommandClient.Handler {
     companion object {
         private const val IP_TRACE_URL = "https://www.cloudflare.com/cdn-cgi/trace"
+        private val LOCAL_CLASH_MODES = listOf("rule", "global", "direct")
     }
 
     private val _serviceStatus = MutableStateFlow(Status.Stopped)
@@ -142,6 +186,14 @@ class DashboardViewModel :
             ),
             this,
         )
+    private val mihomoController = MihomoRuntimeRepository.controller(Application.application)
+    private var localServiceStartTime: Long? = null
+    private var localUplinkTotal = 0L
+    private var localDownlinkTotal = 0L
+    private var localGroupsRefreshJob: Job? = null
+    private val localModeSelectionMutex = Mutex()
+    private val localModeSelectionSequence = AtomicLong()
+    private val ipRefreshSequence = AtomicLong()
 
     override fun createInitialState(): DashboardUiState {
         val savedOrder = loadItemOrder()
@@ -154,6 +206,10 @@ class DashboardViewModel :
         return DashboardUiState(
             cardOrder = savedOrder,
             visibleCards = visibleCards,
+            clashModeVisible = true,
+            clashModes = LOCAL_CLASH_MODES,
+            selectedClashMode = persistedClashMode(),
+            networkMode = MihomoNetworkMode.fromStorage(Settings.mihomoNetworkMode),
         )
     }
 
@@ -166,11 +222,9 @@ class DashboardViewModel :
                 AppLifecycleObserver.isForeground,
                 RemoteControlManager.remoteServer,
                 RemoteControlManager.isConnected,
-                _serviceStatus,
-            ) { foreground, remoteServer, remoteConnected, status ->
+            ) { foreground, remoteServer, remoteConnected ->
                 SessionTarget(
-                    connect = foreground &&
-                        if (remoteServer != null) remoteConnected else status == Status.Started,
+                    connect = foreground && remoteServer != null && remoteConnected,
                     remoteServerId = remoteServer?.id,
                 )
             }.distinctUntilChanged().collect { target ->
@@ -181,9 +235,60 @@ class DashboardViewModel :
                 }
             }
         }
+
+        viewModelScope.launch {
+            combine(
+                RemoteControlManager.remoteServer,
+                mihomoController.runtimeState,
+            ) { remoteServer, runtimeState -> remoteServer to runtimeState }
+                .distinctUntilChanged()
+                .collect { (remoteServer, runtimeState) ->
+                    if (remoteServer == null) {
+                        updateServiceStatus(runtimeState.toServiceStatus())
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            combine(
+                RemoteControlManager.remoteServer,
+                mihomoController.traffic,
+            ) { remoteServer, traffic -> remoteServer to traffic }
+                .collect { (remoteServer, traffic) ->
+                    if (remoteServer == null && mihomoController.runtimeState.value == MihomoRuntimeState.Running) {
+                        updateLocalTraffic(traffic)
+                    }
+                }
+        }
+
+        viewModelScope.launch {
+            combine(
+                RemoteControlManager.remoteServer,
+                mihomoController.connections,
+            ) { remoteServer, connections -> remoteServer to connections }
+                .collect { (remoteServer, connections) ->
+                    if (remoteServer == null) {
+                        val connectionCount = connections.size
+                        updateState {
+                            copy(
+                                connectionsCount = connectionCount,
+                                connectionsIn = connectionCount.toString(),
+                                connectionsOut = connectionCount.toString(),
+                            )
+                        }
+                    }
+                }
+        }
     }
 
     private data class SessionTarget(val connect: Boolean, val remoteServerId: Long?)
+
+    private fun MihomoRuntimeState.toServiceStatus(): Status = when (this) {
+        MihomoRuntimeState.Stopped, MihomoRuntimeState.Failed -> Status.Stopped
+        MihomoRuntimeState.Starting -> Status.Starting
+        MihomoRuntimeState.Running -> Status.Started
+        MihomoRuntimeState.Stopping -> Status.Stopping
+    }
 
     override fun onCleared() {
         super.onCleared()
@@ -199,7 +304,18 @@ class DashboardViewModel :
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val profiles = ProfileManager.list()
-                val selectedId = Settings.selectedProfile
+                var selectedId = Settings.selectedProfile
+                var selectionChanged = false
+                if (profiles.none { it.id == selectedId && it.typed.core == io.nekohasekai.sfa.database.ProfileCore.Mihomo }) {
+                    selectedId = profiles.firstOrNull {
+                        it.typed.core == io.nekohasekai.sfa.database.ProfileCore.Mihomo
+                    }?.id ?: -1L
+                    Settings.selectedProfile = selectedId
+                    selectionChanged = true
+                }
+                if (selectionChanged) {
+                    UpdateProfileWork.reconfigureUpdater()
+                }
 
                 withContext(Dispatchers.Main) {
                     updateState {
@@ -216,15 +332,18 @@ class DashboardViewModel :
         }
     }
 
-    private fun checkDeprecatedNotes() {
+    private fun checkDeprecatedNotes(remoteServerId: Long) {
         viewModelScope.launch(Dispatchers.IO) {
             runCatching {
                 // Check if deprecated warnings are disabled
-                if (Settings.disableDeprecatedWarnings) {
+                if (
+                    Settings.disableDeprecatedWarnings ||
+                    RemoteControlManager.remoteServer.value?.id != remoteServerId
+                ) {
                     return@launch
                 }
 
-                val notes = Libbox.newStandaloneCommandClient().deprecatedNotes
+                val notes = CommandTarget.standaloneClient().deprecatedNotes
                 if (notes.hasNext()) {
                     val notesList = mutableListOf<DashboardUiState.DeprecatedNote>()
                     while (notes.hasNext()) {
@@ -237,11 +356,13 @@ class DashboardViewModel :
                         )
                     }
                     withContext(Dispatchers.Main) {
-                        updateState {
-                            copy(
-                                deprecatedNotes = notesList,
-                                showDeprecatedDialog = notesList.isNotEmpty(),
-                            )
+                        if (RemoteControlManager.remoteServer.value?.id == remoteServerId) {
+                            updateState {
+                                copy(
+                                    deprecatedNotes = notesList,
+                                    showDeprecatedDialog = notesList.isNotEmpty(),
+                                )
+                            }
                         }
                     }
                 }
@@ -252,8 +373,21 @@ class DashboardViewModel :
     fun toggleService() {
         when (currentState.serviceStatus) {
             Status.Starting, Status.Started -> stopService()
-            Status.Stopped -> sendGlobalEvent(UiEvent.RequestStartService)
+            Status.Stopped -> {
+                // Lock startup-sensitive settings before the service snapshots them.
+                updateServiceStatus(Status.Starting)
+                sendGlobalEvent(UiEvent.RequestStartService)
+            }
             else -> { /* Ignore while transitioning */ }
+        }
+    }
+
+    fun cancelPendingServiceStart() {
+        if (
+            currentState.serviceStatus == Status.Starting &&
+            mihomoController.runtimeState.value == MihomoRuntimeState.Stopped
+        ) {
+            updateServiceStatus(Status.Stopped)
         }
     }
 
@@ -287,41 +421,25 @@ class DashboardViewModel :
             try {
                 updateState { copy(isLoading = true) }
                 val profile = ProfileManager.get(profileId) ?: return@launch
-                val previousCore = ProfileRuntime.selectedCore()
-                val coreChanged = previousCore != profile.typed.core
-                val serviceWasRunning = _serviceStatus.value == Status.Started
-
-                // Stop the currently active core before changing the selected
-                // profile, so stopActive still resolves the old owner.
-                if (serviceWasRunning && coreChanged) {
-                    ProfileRuntime.stopActive(Application.application)
-                    for (i in 0 until 50) {
-                        if (_serviceStatus.value == Status.Stopped) break
-                        delay(100L)
-                    }
+                require(profile.typed.core == io.nekohasekai.sfa.database.ProfileCore.Mihomo) {
+                    "此版本仅支持 Mihomo 配置，请重新导入 Clash/Mihomo YAML 订阅"
                 }
+                val serviceWasRunning = _serviceStatus.value == Status.Started
+                val previousProfileId = Settings.selectedProfile
+
                 Settings.selectedProfile = profileId
 
-                // Check if service is running
-                if (serviceWasRunning) {
-                    if (coreChanged) {
-                        GlobalEventBus.emit(UiEvent.RequestReconnectService)
-                        GlobalEventBus.emit(UiEvent.RequestStartService)
-                    } else if (profile.typed.core == io.nekohasekai.sfa.database.ProfileCore.SingBox && Settings.rebuildServiceMode()) {
-                        // Need full restart
-                        ProfileRuntime.stopActive(Application.application)
-                        for (i in 0 until 50) {
-                            if (_serviceStatus.value == Status.Stopped) {
-                                break
-                            }
-                            delay(100L)
-                        }
-                        GlobalEventBus.emit(UiEvent.RequestReconnectService)
-                        GlobalEventBus.emit(UiEvent.RequestStartService)
-                    } else {
-                        // A same-core profile switch is a config reload.
+                try {
+                    if (serviceWasRunning) {
                         ProfileRuntime.reloadSelectedIfRunning(Application.application)
+                        refreshLocalGroups()
                     }
+                } catch (exception: Exception) {
+                    Settings.selectedProfile = previousProfileId
+                    if (serviceWasRunning && previousProfileId >= 0) {
+                        runCatching { ProfileRuntime.reloadSelectedIfRunning(Application.application) }
+                    }
+                    throw exception
                 }
 
                 withContext(Dispatchers.Main) {
@@ -342,6 +460,10 @@ class DashboardViewModel :
     fun deleteProfile(profile: Profile) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                val deletingSelected = profile.id == Settings.selectedProfile
+                if (deletingSelected && _serviceStatus.value != Status.Stopped) {
+                    ProfileRuntime.stopActive(Application.application)
+                }
                 // Update UI immediately for responsiveness
                 withContext(Dispatchers.Main) {
                     updateState {
@@ -352,6 +474,12 @@ class DashboardViewModel :
                 }
                 // Then delete from database
                 ProfileManager.delete(profile)
+                if (deletingSelected) {
+                    Settings.selectedProfile = ProfileManager.list()
+                        .firstOrNull { it.typed.core == io.nekohasekai.sfa.database.ProfileCore.Mihomo }
+                        ?.id ?: -1L
+                }
+                UpdateProfileWork.reconfigureUpdater()
             } catch (e: Exception) {
                 // Reload profiles if deletion fails
                 loadProfiles()
@@ -450,40 +578,67 @@ class DashboardViewModel :
     }
 
     fun updateServiceStatus(status: Status) {
-        viewModelScope.launch {
-            _serviceStatus.emit(status)
-            updateState {
-                copy(
-                    serviceStatus = status,
-                    isStatusVisible =
-                    if (RemoteControlManager.remoteServer.value != null) {
-                        isStatusVisible
-                    } else {
-                        status == Status.Starting || status == Status.Started
-                    },
-                )
-            }
-            handleServiceStatusChange(status)
+        _serviceStatus.value = status
+        updateState {
+            copy(
+                serviceStatus = status,
+                isStatusVisible =
+                if (RemoteControlManager.remoteServer.value != null) {
+                    isStatusVisible
+                } else {
+                    status == Status.Starting || status == Status.Started
+                },
+            )
         }
+        handleServiceStatusChange(status)
     }
 
     private fun handleServiceStatusChange(status: Status) {
         val isRemote = RemoteControlManager.remoteServer.value != null
         when (status) {
             Status.Started -> {
-                checkDeprecatedNotes()
                 if (isRemote) {
                     return
                 }
-                reloadSystemProxyStatus()
-                reloadStartedAt()
-                refreshIpInfo(force = true)
+                val firstRunningUpdate = localServiceStartTime == null
+                if (firstRunningUpdate) {
+                    localServiceStartTime = System.currentTimeMillis()
+                    localUplinkTotal = 0L
+                    localDownlinkTotal = 0L
+                }
+                updateState {
+                    copy(
+                        serviceStartTime = localServiceStartTime,
+                        isStatusVisible = true,
+                        trafficVisible = true,
+                        memory = "",
+                        goroutines = "",
+                        clashModeVisible = true,
+                        clashModes = LOCAL_CLASH_MODES,
+                        selectedClashMode = persistedClashMode(),
+                        networkMode = MihomoNetworkMode.fromStorage(Settings.mihomoNetworkMode),
+                        systemProxyVisible = false,
+                        systemProxyEnabled = false,
+                        systemProxySwitching = false,
+                    )
+                }
+                refreshLocalGroups()
+                if (firstRunningUpdate) {
+                    refreshIpInfo(force = true)
+                }
             }
 
             Status.Stopped -> {
                 if (isRemote) {
                     return
                 }
+                localModeSelectionSequence.incrementAndGet()
+                ipRefreshSequence.incrementAndGet()
+                localGroupsRefreshJob?.cancel()
+                localGroupsRefreshJob = null
+                localServiceStartTime = null
+                localUplinkTotal = 0L
+                localDownlinkTotal = 0L
                 updateState {
                     copy(
                         hasGroups = false,
@@ -492,8 +647,13 @@ class DashboardViewModel :
                         currentProxyName = null,
                         connectionsCount = 0,
                         serviceStartTime = null,
-                        clashModeVisible = false,
+                        clashModeVisible = true,
+                        clashModes = LOCAL_CLASH_MODES,
+                        selectedClashMode = persistedClashMode(),
+                        networkMode = MihomoNetworkMode.fromStorage(Settings.mihomoNetworkMode),
                         systemProxyVisible = false,
+                        systemProxyEnabled = false,
+                        systemProxySwitching = false,
                         trafficVisible = false,
                         memory = "",
                         goroutines = "",
@@ -514,57 +674,100 @@ class DashboardViewModel :
                 }
             }
 
-            else -> {}
-        }
-    }
-
-    private fun reloadStartedAt() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val startedAt = Libbox.newStandaloneCommandClient().startedAt
-                withContext(Dispatchers.Main) {
-                    updateState {
-                        copy(serviceStartTime = startedAt)
-                    }
-                }
-            } catch (_: Exception) {
-            }
-        }
-    }
-
-    private fun reloadSystemProxyStatus() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val status = Libbox.newStandaloneCommandClient().systemProxyStatus
-                withContext(Dispatchers.Main) {
+            Status.Starting, Status.Stopping -> {
+                if (!isRemote) {
                     updateState {
                         copy(
-                            systemProxyVisible = status.available,
-                            systemProxyEnabled = status.enabled,
+                            clashModeVisible = true,
+                            clashModes = LOCAL_CLASH_MODES,
+                            selectedClashMode = persistedClashMode(),
+                            networkMode = MihomoNetworkMode.fromStorage(Settings.mihomoNetworkMode),
+                            systemProxyVisible = false,
+                            systemProxyEnabled = false,
+                            systemProxySwitching = false,
                         )
                     }
                 }
-            } catch (e: Exception) {
-                // Ignore errors
             }
+        }
+    }
+
+    fun refreshLocalGroups() {
+        localGroupsRefreshJob?.cancel()
+        localGroupsRefreshJob = viewModelScope.launch(Dispatchers.IO) {
+            val groups = runCatching { mihomoController.getProxyGroups() }.getOrNull() ?: return@launch
+            val mode = runCatching { mihomoController.getMode() }.getOrNull()
+                ?.trim()
+                ?.lowercase()
+                ?.takeIf { it in LOCAL_CLASH_MODES }
+                ?: return@launch
+            val selection = dashboardProxySelection(mode, groups)
+            withContext(Dispatchers.Main) {
+                if (
+                    RemoteControlManager.remoteServer.value == null &&
+                    mihomoController.runtimeState.value == MihomoRuntimeState.Running
+                ) {
+                    updateState {
+                        copy(
+                            hasGroups = groups.isNotEmpty(),
+                            groupsCount = groups.size,
+                            currentProxyGroup = selection?.group,
+                            currentProxyName = selection?.node,
+                            clashModeVisible = true,
+                            clashModes = LOCAL_CLASH_MODES,
+                            selectedClashMode = mode.lowercase(),
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updateLocalTraffic(traffic: MihomoTraffic) {
+        localUplinkTotal += traffic.up.coerceAtLeast(0L)
+        localDownlinkTotal += traffic.down.coerceAtLeast(0L)
+        updateState {
+            copy(
+                trafficVisible = true,
+                uplink = "${formatBytes(traffic.up)}/s",
+                downlink = "${formatBytes(traffic.down)}/s",
+                uplinkTotal = formatBytes(localUplinkTotal),
+                downlinkTotal = formatBytes(localDownlinkTotal),
+                uplinkHistory = uplinkHistory.drop(1) + traffic.up.toFloat(),
+                downlinkHistory = downlinkHistory.drop(1) + traffic.down.toFloat(),
+            )
         }
     }
 
     fun toggleSystemProxy(enabled: Boolean) {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id
+        if (remoteServerId == null) {
+            updateState {
+                copy(
+                    systemProxyVisible = false,
+                    systemProxyEnabled = false,
+                    systemProxySwitching = false,
+                )
+            }
+            return
+        }
         if (currentState.systemProxySwitching) return
 
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
                 updateState { copy(systemProxySwitching = true) }
                 Settings.systemProxyEnabled = enabled
-                Libbox.newStandaloneCommandClient().setSystemProxyEnabled(enabled)
+                CommandTarget.standaloneClient().setSystemProxyEnabled(enabled)
                 delay(1000L)
                 withContext(Dispatchers.Main) {
-                    updateState {
-                        copy(
-                            systemProxyEnabled = enabled,
-                            systemProxySwitching = false,
-                        )
+                    if (RemoteControlManager.remoteServer.value?.id == remoteServerId) {
+                        updateState {
+                            copy(
+                                systemProxyEnabled = enabled,
+                                systemProxySwitching = false,
+                            )
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -575,13 +778,61 @@ class DashboardViewModel :
     }
 
     fun selectClashMode(mode: String) {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id
+        if (remoteServerId == null) {
+            val normalizedMode = mode.trim().lowercase()
+            if (normalizedMode !in LOCAL_CLASH_MODES) return
+            if (currentState.serviceStatus == Status.Starting || currentState.serviceStatus == Status.Stopping) return
+            if (
+                currentState.serviceStatus == Status.Stopped &&
+                mihomoController.runtimeState.value == MihomoRuntimeState.Stopped
+            ) {
+                Settings.mihomoClashMode = normalizedMode
+                updateState { copy(selectedClashMode = normalizedMode) }
+                return
+            }
+            if (mihomoController.runtimeState.value != MihomoRuntimeState.Running) return
+            val selectionToken = localModeSelectionSequence.incrementAndGet()
+            viewModelScope.launch(Dispatchers.IO) {
+                try {
+                    localModeSelectionMutex.withLock {
+                        if (
+                            selectionToken != localModeSelectionSequence.get() ||
+                            RemoteControlManager.remoteServer.value != null ||
+                            mihomoController.runtimeState.value != MihomoRuntimeState.Running
+                        ) {
+                            return@withLock
+                        }
+                        mihomoController.setMode(normalizedMode)
+                        Settings.mihomoClashMode = normalizedMode
+                        // Existing keep-alive connections retain their old route.
+                        // Closing them makes the newly selected mode observable immediately.
+                        runCatching { mihomoController.closeAllConnections() }
+                        if (selectionToken != localModeSelectionSequence.get()) return@withLock
+                        withContext(Dispatchers.Main) {
+                            updateState { copy(selectedClashMode = normalizedMode) }
+                            refreshLocalGroups()
+                            refreshIpInfo(force = true)
+                        }
+                    }
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (exception: Exception) {
+                    sendError(exception)
+                }
+            }
+            return
+        }
         viewModelScope.launch(Dispatchers.IO) {
             try {
+                if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
                 CommandTarget.standaloneClient().setClashMode(mode)
                 // Update UI state directly without reconnecting
                 withContext(Dispatchers.Main) {
-                    updateState {
-                        copy(selectedClashMode = mode)
+                    if (RemoteControlManager.remoteServer.value?.id == remoteServerId) {
+                        updateState {
+                            copy(selectedClashMode = mode)
+                        }
                     }
                 }
             } catch (e: Exception) {
@@ -590,21 +841,30 @@ class DashboardViewModel :
         }
     }
 
+    fun selectNetworkMode(mode: MihomoNetworkMode) {
+        if (RemoteControlManager.remoteServer.value != null || currentState.serviceStatus != Status.Stopped) return
+        if (mode == MihomoNetworkMode.SystemProxy && Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) {
+            sendErrorMessage(Application.application.getString(R.string.network_mode_system_proxy_unavailable))
+            return
+        }
+        Settings.mihomoNetworkMode = mode.storageValue
+        updateState { copy(networkMode = mode) }
+    }
+
     // CommandClient.Handler implementation
     override fun onConnected() {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Main) {
+            if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
             updateState { copy(isStatusVisible = true) }
-            // Returning from remote control skipped the local reloads that
-            // normally run when the service starts.
-            if (RemoteControlManager.remoteServer.value == null && _serviceStatus.value == Status.Started) {
-                reloadSystemProxyStatus()
-                reloadStartedAt()
-            }
+            checkDeprecatedNotes(remoteServerId)
         }
     }
 
     override fun onDisconnected() {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Main) {
+            if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
             updateState {
                 copy(
                     memory = "",
@@ -616,26 +876,28 @@ class DashboardViewModel :
     }
 
     override fun updateStatus(status: StatusMessage) {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Main) {
+            if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
             updateState {
                 // Update history by adding new values and removing old ones
                 val newUplinkHistory = (uplinkHistory.drop(1) + status.uplink.toFloat())
                 val newDownlinkHistory = (downlinkHistory.drop(1) + status.downlink.toFloat())
 
                 // Format the total values
-                val newUplinkTotal = Libbox.formatBytes(status.uplinkTotal)
-                val newDownlinkTotal = Libbox.formatBytes(status.downlinkTotal)
+                val newUplinkTotal = formatBytes(status.uplinkTotal)
+                val newDownlinkTotal = formatBytes(status.downlinkTotal)
 
                 copy(
-                    memory = Libbox.formatBytes(status.memory),
+                    memory = formatBytes(status.memory),
                     goroutines = status.goroutines.toString(),
                     // Only set trafficVisible to true, never back to false from status updates
                     trafficVisible = if (status.trafficAvailable) true else trafficVisible,
                     connectionsCount = status.connectionsIn,
                     connectionsIn = status.connectionsIn.toString(),
                     connectionsOut = status.connectionsOut.toString(),
-                    uplink = "${Libbox.formatBytes(status.uplink)}/s",
-                    downlink = "${Libbox.formatBytes(status.downlink)}/s",
+                    uplink = "${formatBytes(status.uplink)}/s",
+                    downlink = "${formatBytes(status.downlink)}/s",
                     // Only update total values if they've actually changed
                     uplinkTotal = if (newUplinkTotal != uplinkTotal) newUplinkTotal else uplinkTotal,
                     downlinkTotal = if (newDownlinkTotal != downlinkTotal) newDownlinkTotal else downlinkTotal,
@@ -647,7 +909,9 @@ class DashboardViewModel :
     }
 
     override fun initializeClashMode(modeList: List<String>, currentMode: String) {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Main) {
+            if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
             updateState {
                 copy(
                     clashModeVisible = modeList.size > 1,
@@ -659,7 +923,9 @@ class DashboardViewModel :
     }
 
     override fun updateClashMode(newMode: String) {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Main) {
+            if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
             updateState {
                 copy(selectedClashMode = newMode)
             }
@@ -667,7 +933,9 @@ class DashboardViewModel :
     }
 
     override fun updateGroups(newGroups: MutableList<OutboundGroup>) {
+        val remoteServerId = RemoteControlManager.remoteServer.value?.id ?: return
         viewModelScope.launch(Dispatchers.Main) {
+            if (RemoteControlManager.remoteServer.value?.id != remoteServerId) return@launch
             val hasGroups = newGroups.isNotEmpty()
             val activeGroup =
                 newGroups.firstOrNull { it.selectable && it.selected.isNotBlank() }
@@ -684,13 +952,14 @@ class DashboardViewModel :
     }
 
     fun refreshIpInfo(force: Boolean = false) {
-        if (currentState.publicIpLoading) return
+        if (currentState.publicIpLoading && !force) return
         if (!force && (currentState.publicIp != null || currentState.publicIpError != null)) return
 
+        val refreshToken = ipRefreshSequence.incrementAndGet()
         viewModelScope.launch(Dispatchers.IO) {
             updateState { copy(publicIpLoading = true, publicIpError = null) }
             try {
-                val trace = HTTPClient().use { it.getString(IP_TRACE_URL) }
+                val trace = HTTPClient().use { it.getStringViaActiveNetwork(IP_TRACE_URL) }
                 val values =
                     trace.lineSequence()
                         .mapNotNull { line ->
@@ -704,6 +973,7 @@ class DashboardViewModel :
                 val ip = values["ip"]?.takeIf { it.isNotBlank() }
                     ?: error("Public IP response did not contain an address")
                 withContext(Dispatchers.Main) {
+                    if (refreshToken != ipRefreshSequence.get()) return@withContext
                     updateState {
                         copy(
                             publicIp = ip,
@@ -716,6 +986,7 @@ class DashboardViewModel :
                 }
             } catch (exception: Exception) {
                 withContext(Dispatchers.Main) {
+                    if (refreshToken != ipRefreshSequence.get()) return@withContext
                     updateState {
                         copy(
                             publicIpLoading = false,
@@ -820,7 +1091,7 @@ class DashboardViewModel :
         val savedDisabled = Settings.dashboardDisabledItems
         val disabledItems =
             savedDisabled
-                .filterNot { it in setOf("UploadTraffic", "DownloadTraffic", "Connections") }
+                .filterNot { it in setOf("UploadTraffic", "DownloadTraffic", "Connections", "SystemProxy") }
                 .mapNotNull { stringToCardGroup(it) }
                 .filterTo(mutableSetOf()) { it in configurableDashboardCards }
 
@@ -856,4 +1127,6 @@ class DashboardViewModel :
                 null
             }
     }
+
+    private fun persistedClashMode(): String = Settings.mihomoClashMode.trim().lowercase().takeIf { it in LOCAL_CLASH_MODES } ?: "rule"
 }

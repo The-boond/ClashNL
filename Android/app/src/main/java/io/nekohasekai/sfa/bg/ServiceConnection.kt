@@ -40,6 +40,7 @@ class ServiceConnection(private val context: Context, callback: Callback, privat
     }
 
     fun disconnect() {
+        unregisterCallback()
         try {
             context.unbindService(this)
         } catch (_: IllegalArgumentException) {
@@ -48,6 +49,7 @@ class ServiceConnection(private val context: Context, callback: Callback, privat
     }
 
     fun reconnect() {
+        unregisterCallback()
         try {
             context.unbindService(this)
         } catch (_: IllegalArgumentException) {
@@ -75,14 +77,18 @@ class ServiceConnection(private val context: Context, callback: Callback, privat
     }
 
     override fun onServiceDisconnected(name: ComponentName?) {
+        unregisterCallback()
+        callback.onServiceStatusChanged(Status.Stopped.ordinal)
+        Log.d(TAG, "service disconnected")
+    }
+
+    private fun unregisterCallback() {
         try {
             service?.unregisterCallback(callback)
         } catch (e: RemoteException) {
             Log.e(TAG, "cleanup service connection", e)
         }
         service = null
-        callback.onServiceStatusChanged(Status.Stopped.ordinal)
-        Log.d(TAG, "service disconnected")
     }
 
     override fun onBindingDied(name: ComponentName?) {

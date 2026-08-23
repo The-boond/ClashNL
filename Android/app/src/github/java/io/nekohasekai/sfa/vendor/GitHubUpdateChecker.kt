@@ -1,26 +1,25 @@
 package io.nekohasekai.sfa.vendor
 
 import android.os.Build
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.BuildConfig
-import io.nekohasekai.sfa.ktx.unwrap
+import io.nekohasekai.sfa.update.SemanticVersion
 import io.nekohasekai.sfa.update.UpdateInfo
 import io.nekohasekai.sfa.update.UpdateTrack
+import io.nekohasekai.sfa.utils.AppHttpTransport
 import io.nekohasekai.sfa.utils.HTTPClient
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import okhttp3.Request
 import java.io.Closeable
+import java.io.IOException
+import java.util.Locale
 
 class GitHubUpdateChecker : Closeable {
     companion object {
-        private const val RELEASES_URL = "https://api.github.com/repos/SagerNet/sing-box/releases"
-        private const val METADATA_FILENAME = "SFA-version-metadata.json"
-    }
-
-    private val client = Libbox.newHTTPClient().apply {
-        modernTLS()
-        keepAlive()
+        private const val RELEASES_URL = "https://api.github.com/repos/The-boond/ClashNL/releases"
+        private const val METADATA_FILENAME = "ClashNL-version-metadata.json"
+        private val KNOWN_ABIS = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
     }
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -34,50 +33,64 @@ class GitHubUpdateChecker : Closeable {
                 continue
             }
             val metadata = runCatching { downloadMetadata(release) }.getOrNull() ?: continue
+            val apkAsset = findCompatibleApk(release) ?: continue
             if (!isNewerThanCurrent(metadata.versionName)) {
                 continue
             }
             val currentBest = selected
             if (currentBest == null || isBetterVersion(metadata, currentBest.metadata)) {
-                selected = ReleaseCandidate(release, metadata)
+                selected = ReleaseCandidate(release, metadata, apkAsset)
             }
         }
 
-        val release = selected?.release ?: return null
-        val metadata = selected.metadata
-
-        val isLegacy = Build.VERSION.SDK_INT < Build.VERSION_CODES.M
-        val apkAsset = release.assets.find { asset ->
-            asset.name.endsWith(".apk") &&
-                !asset.name.contains("play") &&
-                asset.name.contains("legacy-android-5") == isLegacy
-        }
+        val candidate = selected ?: return null
+        val release = candidate.release
+        val metadata = candidate.metadata
 
         return UpdateInfo(
             versionCode = metadata.versionCode,
             versionName = metadata.versionName,
-            downloadUrl = apkAsset?.browserDownloadUrl ?: release.htmlUrl,
+            downloadUrl = candidate.apkAsset.browserDownloadUrl,
             releaseUrl = release.htmlUrl,
             releaseNotes = release.body,
             isPrerelease = release.prerelease,
-            fileSize = apkAsset?.size ?: 0,
+            fileSize = candidate.apkAsset.size,
         )
     }
 
+    private fun findCompatibleApk(release: GitHubRelease): GitHubAsset? {
+        val isLegacy = Build.VERSION.SDK_INT < Build.VERSION_CODES.M
+        val candidates = release.assets.filter { asset ->
+            val name = asset.name.lowercase(Locale.ROOT)
+            name.endsWith(".apk") &&
+                asset.browserDownloadUrl.isNotBlank() &&
+                !name.contains("play") &&
+                name.contains("legacy-android-5") == isLegacy
+        }
+        for (abi in Build.SUPPORTED_ABIS) {
+            candidates.find { assetMatchesAbi(it.name, abi) }?.let { return it }
+        }
+        candidates.find { it.name.contains("universal", ignoreCase = true) }?.let { return it }
+        return candidates.find { asset ->
+            KNOWN_ABIS.none { abi -> assetMatchesAbi(asset.name, abi) }
+        }
+    }
+
+    private fun assetMatchesAbi(assetName: String, abi: String): Boolean = assetName.endsWith("-$abi.apk", ignoreCase = true) ||
+        assetName.contains("-$abi-", ignoreCase = true)
+
     private fun getReleases(githubToken: String): List<GitHubRelease> {
-        val request = client.newRequest()
-        request.setURL(RELEASES_URL)
-        request.setHeader("Accept", "application/vnd.github.v3+json")
+        val request = Request.Builder()
+            .url(RELEASES_URL)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .header("User-Agent", HTTPClient.userAgent)
         val token = githubToken.trim()
         if (token.isNotEmpty()) {
-            request.setHeader("Authorization", "Bearer $token")
+            request.header("Authorization", "Bearer $token")
         }
-        request.setUserAgent(HTTPClient.userAgent)
 
-        val response = request.execute()
-        val content = response.content.unwrap
-
-        return json.decodeFromString(content)
+        return executeString(request.build()).let(json::decodeFromString)
     }
 
     private fun isReleaseInTrack(release: GitHubRelease, track: UpdateTrack): Boolean {
@@ -90,14 +103,13 @@ class GitHubUpdateChecker : Closeable {
         }
     }
 
-    private fun isNewerThanCurrent(versionName: String): Boolean = Libbox.compareSemver(versionName, BuildConfig.VERSION_NAME)
+    private fun isNewerThanCurrent(versionName: String): Boolean = SemanticVersion.compare(versionName, BuildConfig.VERSION_NAME)?.let { it > 0 } == true
 
     private fun isBetterVersion(version: VersionMetadata, other: VersionMetadata): Boolean {
-        if (Libbox.compareSemver(version.versionName, other.versionName)) {
-            return true
-        }
-        if (Libbox.compareSemver(other.versionName, version.versionName)) {
-            return false
+        when (SemanticVersion.compare(version.versionName, other.versionName)) {
+            null -> return false
+            in Int.MIN_VALUE until 0 -> return false
+            in 1..Int.MAX_VALUE -> return true
         }
         return version.versionCode > other.versionCode
     }
@@ -106,18 +118,24 @@ class GitHubUpdateChecker : Closeable {
         val metadataAsset = release.assets.find { it.name == METADATA_FILENAME }
             ?: return null
 
-        val request = client.newRequest()
-        request.setURL(metadataAsset.browserDownloadUrl)
-        request.setUserAgent(HTTPClient.userAgent)
+        val request = Request.Builder()
+            .url(metadataAsset.browserDownloadUrl)
+            .header("Accept", "application/json")
+            .header("User-Agent", HTTPClient.userAgent)
+            .build()
 
-        val response = request.execute()
-        val content = response.content.unwrap
+        return json.decodeFromString<VersionMetadata>(executeString(request))
+    }
 
-        return json.decodeFromString<VersionMetadata>(content)
+    private fun executeString(request: Request): String = AppHttpTransport.execute(request, preferLocalSocks = true).use { response ->
+        if (!response.isSuccessful) {
+            throw IOException("GitHub request failed (HTTP ${response.code})")
+        }
+        response.body?.string() ?: throw IOException("GitHub returned an empty response")
     }
 
     override fun close() {
-        client.close()
+        // AppHttpTransport is stateless; retained for existing use-call sites.
     }
 
     @Serializable
@@ -147,5 +165,6 @@ class GitHubUpdateChecker : Closeable {
     private data class ReleaseCandidate(
         val release: GitHubRelease,
         val metadata: VersionMetadata,
+        val apkAsset: GitHubAsset,
     )
 }

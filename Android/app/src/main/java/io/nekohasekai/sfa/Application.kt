@@ -8,18 +8,18 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.getSystemService
-import io.nekohasekai.libbox.Libbox
-import io.nekohasekai.libbox.SetupOptions
 import io.nekohasekai.sfa.bg.AppChangeReceiver
 import io.nekohasekai.sfa.bg.CrashReportManager
 import io.nekohasekai.sfa.bg.OOMReportManager
 import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.compose.theme.AppThemeMode
-import io.nekohasekai.sfa.constant.Bugs
+import io.nekohasekai.sfa.database.LegacyProfileMigration
+import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
 import io.nekohasekai.sfa.utils.HookModuleUpdateNotifier
@@ -29,8 +29,7 @@ import io.nekohasekai.sfa.vendor.Vendor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import java.io.File
-import java.util.Locale
+import java.security.KeyStore
 import io.nekohasekai.sfa.Application as BoxApplication
 
 class Application : Application() {
@@ -41,19 +40,17 @@ class Application : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        val legacyManagedProfileId = removeLegacyAccountCredentials()
         AppCompatDelegate.setDefaultNightMode(
             AppThemeMode.fromValue(Settings.appThemeMode).nightMode,
         )
         Settings.dynamicNotification = false
         Settings.updateSource = "github"
+        // Remote control is backed by the retired libbox runtime. Never let a
+        // persisted remote session load it into Mihomo's process on startup.
+        Settings.activeRemoteServerId = 0L
         AppLifecycleObserver.register(this)
 
-//        Seq.setContext(this)
-        runCatching {
-            Libbox.setLocale(Locale.getDefault().toLanguageTag())
-        }.onFailure {
-            Log.d("Application", "set locale: ${it.message}")
-        }
         HookStatusClient.register(this)
         PrivilegeSettingsClient.register(this)
 
@@ -70,7 +67,7 @@ class Application : Application() {
 
         @Suppress("OPT_IN_USAGE")
         GlobalScope.launch(Dispatchers.IO) {
-            initialize(baseDir, workingDir, tempDir)
+            cleanUpLegacyProfiles(legacyManagedProfileId)
             UpdateProfileWork.reconfigureUpdater()
             HookModuleUpdateNotifier.sync(this@Application)
         }
@@ -87,34 +84,65 @@ class Application : Application() {
         }
     }
 
-    private fun initialize(baseDir: File, workingDir: File?, tempDir: File) {
-        val actualWorkingDir = workingDir ?: return
-        setupLibbox(baseDir, actualWorkingDir, tempDir)
+    /** Permanently discard credentials left by versions that included account login. */
+    private fun removeLegacyAccountCredentials(): Long {
+        val preferences = getSharedPreferences("clashnl_account_session", Context.MODE_PRIVATE)
+        val managedProfileId = when (val value = preferences.all["managed_profile_id"]) {
+            is Number -> value.toLong()
+            is String -> value.toLongOrNull() ?: -1L
+            else -> -1L
+        }
+        if (!preferences.edit().clear().commit()) {
+            Log.w("Application", "Unable to clear legacy account preferences")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            runCatching { deleteSharedPreferences("clashnl_account_session") }
+        }
+        runCatching {
+            KeyStore.getInstance("AndroidKeyStore").apply {
+                load(null)
+                if (containsAlias("clashnl_account_session_rsa_v1")) {
+                    deleteEntry("clashnl_account_session_rsa_v1")
+                }
+            }
+        }.onFailure {
+            Log.w("Application", "Unable to remove legacy account key", it)
+        }
+        return managedProfileId
     }
 
-    fun reloadSetupOptions() {
-        val baseDir = filesDir
-        val workingDir = getExternalFilesDir(null) ?: return
-        val tempDir = cacheDir
-        Libbox.reloadSetupOptions(createSetupOptions(baseDir, workingDir, tempDir))
+    private suspend fun cleanUpLegacyProfiles(managedProfileId: Long) {
+        if (managedProfileId >= 0L) {
+            runCatching {
+                ProfileManager.get(managedProfileId)?.let { ProfileManager.delete(it) }
+            }.onFailure {
+                Log.e("Application", "Unable to remove legacy account-managed profile", it)
+            }
+        }
+
+        val profiles =
+            runCatching { ProfileManager.list() }.getOrElse {
+                Log.e("Application", "Unable to inspect legacy profiles", it)
+                return
+            }
+        val plan = LegacyProfileMigration.plan(profiles, Settings.selectedProfile)
+        val profilesToUpdate =
+            profiles.filter { profile -> profile.id in plan.disableAutoUpdateProfileIds }
+                .onEach { profile -> profile.typed.autoUpdate = false }
+        if (profilesToUpdate.isNotEmpty()) {
+            runCatching { ProfileManager.update(profilesToUpdate) }.onFailure {
+                Log.e("Application", "Unable to disable legacy profile auto-update", it)
+            }
+        }
+        if (plan.replaceSelection) {
+            Settings.selectedProfile = plan.replacementProfileId
+            Settings.startedByUser = false
+            Settings.activeProfileCore = ""
+        }
     }
 
-    private fun setupLibbox(baseDir: File, workingDir: File, tempDir: File) {
-        Libbox.setup(createSetupOptions(baseDir, workingDir, tempDir))
-    }
-
-    private fun createSetupOptions(baseDir: File, workingDir: File, tempDir: File): SetupOptions = SetupOptions().also {
-        it.basePath = baseDir.path
-        it.workingPath = workingDir.path
-        it.tempPath = tempDir.path
-        it.fixAndroidStack = Bugs.fixAndroidStack
-        it.logMaxLines = 3000
-        it.debug = BuildConfig.DEBUG
-        it.crashReportSource = "Application"
-        it.oomKillerEnabled = Settings.oomKillerEnabled
-        it.oomKillerDisabled = Settings.oomKillerDisabled
-        it.oomMemoryLimit = Settings.oomMemoryLimitMB.toLong() * 1024L * 1024L
-    }
+    /** Legacy diagnostics settings no longer configure a sing-box runtime. */
+    fun reloadSetupOptions() = Unit
 
     companion object {
         lateinit var application: BoxApplication

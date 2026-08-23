@@ -2,6 +2,8 @@ package io.nekohasekai.sfa.compose.model
 
 import androidx.compose.runtime.Immutable
 import io.nekohasekai.sfa.ktx.toList
+import io.nekohasekai.sfa.mihomo.MihomoConnection
+import java.time.Instant
 import io.nekohasekai.libbox.Connection as LibboxConnection
 import io.nekohasekai.libbox.ProcessInfo as LibboxProcessInfo
 
@@ -110,5 +112,62 @@ data class Connection(
             chain = connection.chain().toList(),
             processInfo = ProcessInfo.from(connection.processInfo),
         )
+
+        fun from(connection: MihomoConnection): Connection {
+            val destinationHost = connection.host.ifBlank { connection.destinationIp }
+            val destination = joinHostPort(destinationHost, connection.destinationPort)
+            val source = joinHostPort(connection.sourceIp, connection.sourcePort)
+            val outbound = connection.chains.firstOrNull().orEmpty()
+            val rule = listOf(connection.rule, connection.rulePayload)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+            val processInfo = if (connection.process.isBlank() && connection.processPath.isBlank()) {
+                null
+            } else {
+                ProcessInfo(
+                    processId = 0,
+                    userId = -1,
+                    userName = "",
+                    processPath = connection.processPath.ifBlank { connection.process },
+                    packageNames = emptyList(),
+                )
+            }
+            return Connection(
+                id = connection.id,
+                inbound = connection.inboundName.ifBlank { "mihomo" },
+                inboundType = connection.type,
+                ipVersion = if (destinationHost.contains(':')) 6 else 4,
+                network = connection.network,
+                source = source,
+                destination = destination,
+                domain = connection.host,
+                displayDestination = destination,
+                protocolName = connection.type,
+                user = connection.inboundUser,
+                fromOutbound = "",
+                createdAt = parseTimestamp(connection.start),
+                closedAt = null,
+                // Mihomo exposes per-connection cumulative counters, not rates.
+                upload = 0,
+                download = 0,
+                uploadTotal = connection.upload,
+                downloadTotal = connection.download,
+                rule = rule,
+                outbound = outbound,
+                outboundType = "",
+                chain = connection.chains,
+                processInfo = processInfo,
+            )
+        }
+
+        private fun joinHostPort(host: String, port: String): String {
+            if (host.isBlank()) return ""
+            if (port.isBlank()) return host
+            return if (host.contains(':') && !host.startsWith('[')) "[$host]:$port" else "$host:$port"
+        }
+
+        private fun parseTimestamp(value: String): Long = runCatching {
+            Instant.parse(value).toEpochMilli()
+        }.getOrDefault(0L)
     }
 }

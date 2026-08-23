@@ -53,8 +53,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import io.nekohasekai.libbox.Libbox
-import io.nekohasekai.libbox.ProfileContent
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.component.qr.QRCodeDialog
 import io.nekohasekai.sfa.compose.component.qr.QRSDialog
@@ -67,14 +65,15 @@ import io.nekohasekai.sfa.compose.util.QRCodeGenerator
 import io.nekohasekai.sfa.compose.util.RelativeTimeFormatter
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
+import io.nekohasekai.sfa.database.ProfileCore
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.ktx.errorDialogBuilder
 import io.nekohasekai.sfa.ktx.shareProfile
-import io.nekohasekai.sfa.ktx.shareProfileAsJson
+import io.nekohasekai.sfa.utils.MihomoProfileExport
+import io.nekohasekai.sfa.utils.formatBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import java.util.Date
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -115,7 +114,6 @@ fun ProfilesCard(
 
     var showQRScanSheet by remember { mutableStateOf(false) }
     var fileExportProfile by remember { mutableStateOf<Profile?>(null) }
-    var jsonExportProfile by remember { mutableStateOf<Profile?>(null) }
 
     val importFromFileLauncher =
         rememberLauncherForActivityResult(
@@ -142,7 +140,7 @@ fun ProfilesCard(
         }
 
     val saveFileLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        contract = ActivityResultContracts.CreateDocument(MihomoProfileExport.CONTENT_TYPE),
     ) { uri ->
         val exportProfile = fileExportProfile
         fileExportProfile = null
@@ -150,43 +148,9 @@ fun ProfilesCard(
             if (exportProfile != null) {
                 coroutineScope.launch(Dispatchers.IO) {
                     try {
-                        val profileData = createProfileContent(exportProfile)
+                        val profileData = MihomoProfileExport.read(exportProfile)
                         context.contentResolver.openOutputStream(uri)?.use { outputStream ->
                             outputStream.write(profileData)
-                        }
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(
-                                context,
-                                context.getString(R.string.success_profile_saved),
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        }
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            Toast.makeText(
-                                context,
-                                "${context.getString(R.string.failed_save_profile)}: ${e.message}",
-                                Toast.LENGTH_SHORT,
-                            ).show()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    val saveJsonFileLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/json"),
-    ) { uri ->
-        val exportProfile = jsonExportProfile
-        jsonExportProfile = null
-        if (uri != null) {
-            if (exportProfile != null) {
-                coroutineScope.launch(Dispatchers.IO) {
-                    try {
-                        val jsonContent = File(exportProfile.typed.path).readText()
-                        context.contentResolver.openOutputStream(uri)?.use { outputStream ->
-                            outputStream.write(jsonContent.toByteArray())
                         }
                         withContext(Dispatchers.Main) {
                             Toast.makeText(
@@ -284,7 +248,27 @@ fun ProfilesCard(
                         },
                         onSaveFile = {
                             fileExportProfile = profile
-                            saveFileLauncher.launch("${profile.name}.bpf")
+                            saveFileLauncher.launch(MihomoProfileExport.fileName(profile.name))
+                        },
+                        onShareURL = {
+                            qrCodeProfile = profile
+                            showQRCodeDialog = true
+                        },
+                        onShareQRS = {
+                            coroutineScope.launch(Dispatchers.IO) {
+                                try {
+                                    val profileData = MihomoProfileExport.read(profile)
+                                    withContext(Dispatchers.Main) {
+                                        qrsProfile = profile
+                                        qrsProfileData = profileData
+                                        showQRSDialog = true
+                                    }
+                                } catch (e: Exception) {
+                                    withContext(Dispatchers.Main) {
+                                        context.errorDialogBuilder(e).show()
+                                    }
+                                }
+                            }
                         },
                     )
                 }
@@ -367,7 +351,7 @@ fun ProfilesCard(
     if (showQRCodeDialog && qrCodeProfile != null) {
         val profile = qrCodeProfile!!
         val link = remember(profile) {
-            Libbox.generateRemoteProfileImportLink(
+            MihomoProfileExport.remoteImportLink(
                 profile.name,
                 profile.typed.remoteURL,
             )
@@ -529,25 +513,6 @@ fun ProfilesCard(
     }
 }
 
-private suspend fun createProfileContent(profile: Profile): ByteArray {
-    val content = ProfileContent()
-    content.name = profile.name
-    when (profile.typed.type) {
-        TypedProfile.Type.Local -> {
-            content.type = Libbox.ProfileTypeLocal
-        }
-        TypedProfile.Type.Remote -> {
-            content.type = Libbox.ProfileTypeRemote
-        }
-    }
-    content.config = java.io.File(profile.typed.path).readText()
-    content.remotePath = profile.typed.remoteURL
-    content.autoUpdate = profile.typed.autoUpdate
-    content.autoUpdateInterval = profile.typed.autoUpdateInterval
-    content.lastUpdated = profile.typed.lastUpdated.time
-    return content.encode()
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SubscriptionProfileCard(
@@ -565,6 +530,8 @@ private fun SubscriptionProfileCard(
     onDelete: () -> Unit,
     onShareFile: () -> Unit,
     onSaveFile: () -> Unit,
+    onShareURL: () -> Unit,
+    onShareQRS: () -> Unit,
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
@@ -649,20 +616,38 @@ private fun SubscriptionProfileCard(
                                 },
                             )
                         }
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.save_as_file)) },
-                            onClick = {
-                                showMenu = false
-                                onSaveFile()
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.share_as_file)) },
-                            onClick = {
-                                showMenu = false
-                                onShareFile()
-                            },
-                        )
+                        if (profile.typed.core == ProfileCore.Mihomo) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.save_as_file)) },
+                                onClick = {
+                                    showMenu = false
+                                    onSaveFile()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.share_as_file)) },
+                                onClick = {
+                                    showMenu = false
+                                    onShareFile()
+                                },
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.share_as_qrs)) },
+                                onClick = {
+                                    showMenu = false
+                                    onShareQRS()
+                                },
+                            )
+                            if (profile.typed.type == TypedProfile.Type.Remote) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.profile_share_url)) },
+                                    onClick = {
+                                        showMenu = false
+                                        onShareURL()
+                                    },
+                                )
+                            }
+                        }
                         DropdownMenuItem(
                             text = { Text(stringResource(R.string.menu_delete)) },
                             onClick = {
@@ -752,8 +737,8 @@ private fun ProfileInfoRow(profile: Profile?) {
                     text =
                     stringResource(
                         R.string.subscription_usage,
-                        Libbox.formatBytes(used),
-                        Libbox.formatBytes(total),
+                        formatBytes(used),
+                        formatBytes(total),
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -785,137 +770,6 @@ private fun ProfileInfoRow(profile: Profile?) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-        }
-    }
-}
-
-@Composable
-private fun ProfileActionRow(
-    profile: Profile?,
-    isUpdating: Boolean,
-    showUpdateSuccess: Boolean,
-    onEdit: () -> Unit,
-    onUpdate: () -> Unit,
-    onShareFile: () -> Unit,
-    onSaveFile: () -> Unit,
-    onSaveJson: () -> Unit,
-    onShareJson: () -> Unit,
-    onShareURL: () -> Unit,
-    onShareQRS: () -> Unit,
-) {
-    if (profile == null) return
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        TextButton(
-            onClick = onEdit,
-        ) {
-            Text(stringResource(R.string.edit))
-        }
-
-        if (profile.typed.type == TypedProfile.Type.Remote) {
-            TextButton(
-                onClick = onUpdate,
-                enabled = !isUpdating && !showUpdateSuccess,
-            ) {
-                if (isUpdating) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                }
-                Text(
-                    stringResource(
-                        if (showUpdateSuccess) {
-                            R.string.success
-                        } else {
-                            R.string.update_profile
-                        },
-                    ),
-                )
-            }
-        }
-
-        ShareButton(
-            profile = profile,
-            onShareFile = onShareFile,
-            onSaveFile = onSaveFile,
-            onSaveJson = onSaveJson,
-            onShareJson = onShareJson,
-            onShareURL = onShareURL,
-            onShareQRS = onShareQRS,
-        )
-    }
-}
-
-@Composable
-private fun ShareButton(
-    profile: Profile,
-    onShareFile: () -> Unit,
-    onSaveFile: () -> Unit,
-    onSaveJson: () -> Unit,
-    onShareJson: () -> Unit,
-    onShareURL: () -> Unit,
-    onShareQRS: () -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Box {
-        TextButton(onClick = { expanded = true }) {
-            Text(stringResource(R.string.menu_share))
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.save_as_file)) },
-                onClick = {
-                    expanded = false
-                    onSaveFile()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.share_as_file)) },
-                onClick = {
-                    expanded = false
-                    onShareFile()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.save_content_json)) },
-                onClick = {
-                    expanded = false
-                    onSaveJson()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.share_content_json)) },
-                onClick = {
-                    expanded = false
-                    onShareJson()
-                },
-            )
-            if (profile.typed.type == TypedProfile.Type.Remote) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(R.string.profile_share_url)) },
-                    onClick = {
-                        expanded = false
-                        onShareURL()
-                    },
-                )
-            }
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.share_as_qrs)) },
-                onClick = {
-                    expanded = false
-                    onShareQRS()
-                },
-            )
         }
     }
 }

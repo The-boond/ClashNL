@@ -11,6 +11,8 @@ import java.nio.charset.StandardCharsets
  * previously working configuration intact.
  */
 object ProfileConfigStore {
+    fun read(file: File): String = AtomicFile(file).openRead().bufferedReader(StandardCharsets.UTF_8).use { it.readText() }
+
     fun write(file: File, content: String) {
         file.parentFile?.mkdirs()
         val atomicFile = AtomicFile(file)
@@ -26,7 +28,12 @@ object ProfileConfigStore {
 
     fun writeIfChanged(file: File, content: String): Boolean {
         val bytes = content.toByteArray(StandardCharsets.UTF_8)
-        if (file.exists() && file.readBytes().contentEquals(bytes)) {
+        val existing = if (file.exists()) {
+            runCatching { AtomicFile(file).openRead().use { it.readBytes() } }.getOrNull()
+        } else {
+            null
+        }
+        if (existing?.contentEquals(bytes) == true) {
             return false
         }
         write(file, content)

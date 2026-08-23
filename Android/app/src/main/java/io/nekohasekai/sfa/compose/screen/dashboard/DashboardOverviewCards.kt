@@ -35,10 +35,14 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -54,16 +58,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.BuildConfig
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.LineChart
 import io.nekohasekai.sfa.compose.util.RelativeTimeFormatter
-import io.nekohasekai.sfa.constant.ServiceMode
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
-import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
+import io.nekohasekai.sfa.mihomo.MihomoNetworkMode
+import io.nekohasekai.sfa.utils.CoreVersion
+import io.nekohasekai.sfa.utils.formatBytes
 import java.net.Inet4Address
 
 @Composable
@@ -352,8 +356,8 @@ fun SubscriptionSummaryCard(
                     text =
                     stringResource(
                         R.string.subscription_usage,
-                        Libbox.formatBytes(used),
-                        Libbox.formatBytes(total),
+                        formatBytes(used),
+                        formatBytes(total),
                     ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -418,34 +422,62 @@ fun CurrentProxyCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NetworkSettingsCard(
     serviceStatus: Status,
-    onOpenSettings: () -> Unit,
+    networkMode: MihomoNetworkMode,
+    onModeSelected: (MihomoNetworkMode) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val mode =
-        if (Settings.serviceMode == ServiceMode.VPN) {
-            stringResource(R.string.dashboard_vpn_mode)
-        } else {
-            stringResource(R.string.dashboard_normal_mode)
-        }
     DashboardModuleCard(
         title = stringResource(R.string.dashboard_network_settings),
         icon = Icons.Outlined.SettingsEthernet,
         modifier = modifier,
     ) {
-        DashboardMetric(
-            label = stringResource(R.string.dashboard_service_mode),
-            value = mode,
-        )
+        val modes = listOf(MihomoNetworkMode.SystemProxy, MihomoNetworkMode.VirtualNic)
+        val systemProxyAvailable = Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
+        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+            modes.forEachIndexed { index, mode ->
+                SegmentedButton(
+                    selected = mode == networkMode,
+                    onClick = { onModeSelected(mode) },
+                    enabled =
+                    serviceStatus == Status.Stopped &&
+                        (mode != MihomoNetworkMode.SystemProxy || systemProxyAvailable),
+                    shape = SegmentedButtonDefaults.itemShape(index = index, count = modes.size),
+                ) {
+                    Text(
+                        stringResource(
+                            when (mode) {
+                                MihomoNetworkMode.SystemProxy -> R.string.network_mode_system_proxy
+                                MihomoNetworkMode.VirtualNic -> R.string.network_mode_virtual_nic
+                            },
+                        ),
+                    )
+                }
+            }
+        }
         DashboardMetric(
             label = stringResource(R.string.dashboard_service_status),
             value = serviceStatusLabel(serviceStatus),
         )
-        DashboardAction(
-            label = stringResource(R.string.dashboard_open_settings),
-            onClick = onOpenSettings,
+        Text(
+            text = stringResource(
+                if (serviceStatus == Status.Stopped) {
+                    when {
+                        networkMode == MihomoNetworkMode.SystemProxy && !systemProxyAvailable ->
+                            R.string.network_mode_system_proxy_unavailable
+                        networkMode == MihomoNetworkMode.SystemProxy ->
+                            R.string.network_mode_system_proxy_description
+                        else -> R.string.network_mode_virtual_nic_description
+                    }
+                } else {
+                    R.string.network_mode_stop_before_change
+                },
+            ),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
@@ -660,7 +692,7 @@ fun ClashInfoCard(
     uiState: DashboardUiState,
     modifier: Modifier = Modifier,
 ) {
-    val coreVersion = remember { runCatching { Libbox.version() }.getOrDefault("—") }
+    val coreVersion = remember { CoreVersion.current() }
     DashboardModuleCard(
         title = stringResource(R.string.dashboard_clash_info),
         icon = Icons.Outlined.Info,

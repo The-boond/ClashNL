@@ -60,6 +60,7 @@ import io.nekohasekai.sfa.compose.base.rememberApplyServiceChangeNotifier
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Settings
+import io.nekohasekai.sfa.utils.formatMemoryBytes
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -321,7 +322,7 @@ fun OOMReportListScreen(
                                         )
                                     },
                                     supportingContent = {
-                                        Text(Libbox.formatMemoryBytes(oomMemoryLimitMB.toLong() * 1024L * 1024L))
+                                        Text(formatMemoryBytes(oomMemoryLimitMB.toLong() * 1024L * 1024L))
                                     },
                                     modifier = Modifier.clickable { showMemoryLimitDialog = true },
                                     colors = ListItemDefaults.colors(containerColor = Color.Transparent),
@@ -382,7 +383,7 @@ fun OOMReportListScreen(
                     memoryLimitOptions.forEach { value ->
                         ListItem(
                             headlineContent = {
-                                Text(Libbox.formatMemoryBytes(value.toLong() * 1024L * 1024L))
+                                Text(formatMemoryBytes(value.toLong() * 1024L * 1024L))
                             },
                             leadingContent = {
                                 RadioButton(

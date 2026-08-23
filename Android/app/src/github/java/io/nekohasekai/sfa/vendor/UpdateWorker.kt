@@ -53,6 +53,12 @@ class UpdateWorker(private val appContext: Context, params: WorkerParameters) : 
     }
 
     override suspend fun doWork(): Result {
+        // Old installations may still have this WorkManager job persisted. Never
+        // download an APK until ClashNL publishes and enables its own signed feed.
+        if (!Vendor.hasCustomUpdate) {
+            Log.d(TAG, "ClashNL custom update feed is disabled")
+            return Result.success()
+        }
         if (!Settings.autoUpdateEnabled) {
             Log.d(TAG, "Auto update disabled, skipping")
             return Result.success()

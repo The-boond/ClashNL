@@ -3,6 +3,7 @@ package io.nekohasekai.sfa.bg
 import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.BuildConfig
+import io.nekohasekai.sfa.utils.CoreVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -83,10 +84,7 @@ object CrashReportManager {
                 put("processName", Application.application.packageName)
                 put("appVersion", BuildConfig.VERSION_CODE.toString())
                 put("appMarketingVersion", BuildConfig.VERSION_NAME)
-                runCatching {
-                    put("coreVersion", Libbox.version())
-                    put("goVersion", Libbox.goVersion())
-                }
+                put("coreVersion", CoreVersion.current())
             }
             File(workingDir, PENDING_JVM_METADATA_FILE_NAME).writeText(metadata.toString())
         } catch (_: Throwable) {

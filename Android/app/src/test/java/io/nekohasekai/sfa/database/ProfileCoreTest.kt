@@ -15,4 +15,9 @@ class ProfileCoreTest {
         assertEquals(ProfileCore.SingBox, ProfileCore.fromOrdinal(0))
         assertEquals(ProfileCore.Mihomo, ProfileCore.fromOrdinal(1))
     }
+
+    @Test
+    fun newlyCreatedProfilesUseMihomo() {
+        assertEquals(ProfileCore.Mihomo, TypedProfile().core)
+    }
 }

@@ -97,31 +97,55 @@ JNIEXPORT jstring JNICALL Java_io_nekohasekai_sfa_mihomo_MihomoNativeBridge_nati
     return take_error(env, error);
 }
 
+JNIEXPORT jstring JNICALL Java_io_nekohasekai_sfa_mihomo_MihomoNativeBridge_nativeDescribeProxyGroups(
+    JNIEnv *env, jobject self, jstring content) {
+    (void) self;
+    const char *contentValue = read_string(env, content);
+    char *response = describeProxyGroups((char *) contentValue);
+    release_string(env, content, contentValue);
+    return take_error(env, response);
+}
+
 JNIEXPORT jstring JNICALL Java_io_nekohasekai_sfa_mihomo_MihomoNativeBridge_nativeLoad(
-    JNIEnv *env, jobject self, jstring content, jstring controller, jstring secret) {
+    JNIEnv *env, jobject self, jstring content, jstring controller, jstring secret, jint httpProxyPort) {
     (void) self;
     const char *contentValue = read_string(env, content);
     const char *controllerValue = read_string(env, controller);
     const char *secretValue = read_string(env, secret);
-    char *error = loadConfig((char *) contentValue, (char *) controllerValue, (char *) secretValue);
+    char *error = loadConfig((char *) contentValue, (char *) controllerValue, (char *) secretValue, httpProxyPort);
     release_string(env, content, contentValue);
     release_string(env, controller, controllerValue);
     release_string(env, secret, secretValue);
     return take_error(env, error);
 }
 
+JNIEXPORT jstring JNICALL Java_io_nekohasekai_sfa_mihomo_MihomoNativeBridge_nativeSetMode(
+    JNIEnv *env, jobject self, jstring mode) {
+    (void) self;
+    const char *modeValue = read_string(env, mode);
+    char *error = setMode((char *) modeValue);
+    release_string(env, mode, modeValue);
+    return take_error(env, error);
+}
+
 JNIEXPORT jstring JNICALL Java_io_nekohasekai_sfa_mihomo_MihomoNativeBridge_nativeStartTun(
-    JNIEnv *env, jobject self, jint fd, jstring stack, jstring gateway, jstring dns, jobject callback) {
+    JNIEnv *env, jobject self, jint fd, jstring stack, jstring gateway, jstring dns) {
     (void) self;
     const char *stackValue = read_string(env, stack);
     const char *gatewayValue = read_string(env, gateway);
     const char *dnsValue = read_string(env, dns);
-    jobject callbackGlobal = (*env)->NewGlobalRef(env, callback);
-    char *error = startTun(fd, (char *) stackValue, (char *) gatewayValue, (char *) dnsValue, callbackGlobal);
+    char *error = startTun(fd, (char *) stackValue, (char *) gatewayValue, (char *) dnsValue);
     release_string(env, stack, stackValue);
     release_string(env, gateway, gatewayValue);
     release_string(env, dns, dnsValue);
     return take_error(env, error);
+}
+
+JNIEXPORT void JNICALL Java_io_nekohasekai_sfa_mihomo_MihomoNativeBridge_nativePrepareTun(
+    JNIEnv *env, jobject self, jobject callback) {
+    (void) self;
+    jobject callbackGlobal = (*env)->NewGlobalRef(env, callback);
+    prepareTun(callbackGlobal);
 }
 
 JNIEXPORT void JNICALL Java_io_nekohasekai_sfa_mihomo_MihomoNativeBridge_nativeStopTun(JNIEnv *env, jobject self) {

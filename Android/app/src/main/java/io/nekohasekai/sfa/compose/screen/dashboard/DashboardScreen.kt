@@ -36,13 +36,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import io.nekohasekai.sfa.R
-import io.nekohasekai.sfa.compose.component.RemoteControlMenuItems
-import io.nekohasekai.sfa.compose.component.rememberRemoteServers
 import io.nekohasekai.sfa.compose.navigation.Screen
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
-import io.nekohasekai.sfa.constant.ServiceMode
 import io.nekohasekai.sfa.constant.Status
-import io.nekohasekai.sfa.database.Settings
+import io.nekohasekai.sfa.mihomo.MihomoNetworkMode
 import io.nekohasekai.sfa.utils.RemoteControlManager
 import kotlinx.coroutines.launch
 
@@ -62,7 +59,7 @@ fun DashboardScreen(
     val remoteServer by RemoteControlManager.remoteServer.collectAsState()
     val remoteConnected by RemoteControlManager.isConnected.collectAsState()
     val isRemote = remoteServer != null
-    val remoteServers by rememberRemoteServers()
+    val displayedServiceStatus = if (isRemote) serviceStatus else uiState.serviceStatus
     var showOthersMenu by remember { mutableStateOf(false) }
 
     OverrideTopBar {
@@ -93,10 +90,6 @@ fun DashboardScreen(
                                 showOthersMenu = false
                                 viewModel.toggleCardSettingsDialog()
                             },
-                        )
-                        RemoteControlMenuItems(
-                            servers = remoteServers,
-                            onAction = { showOthersMenu = false },
                         )
                     }
                 }
@@ -157,7 +150,7 @@ fun DashboardScreen(
             if (!isRemote) {
                 item(key = "service-control") {
                     DashboardServiceCard(
-                        serviceStatus = serviceStatus,
+                        serviceStatus = displayedServiceStatus,
                         selectedProfileName = uiState.selectedProfileName,
                         currentProxyName = uiState.currentProxyName,
                         publicIp = uiState.publicIp,
@@ -165,12 +158,12 @@ fun DashboardScreen(
                         publicIpColo = uiState.publicIpColo,
                         publicIpLoading = uiState.publicIpLoading,
                         publicIpError = uiState.publicIpError,
-                        serviceMode =
-                        if (Settings.serviceMode == ServiceMode.VPN) {
-                            stringResource(R.string.dashboard_vpn_mode)
-                        } else {
-                            stringResource(R.string.dashboard_normal_mode)
-                        },
+                        serviceMode = stringResource(
+                            when (uiState.networkMode) {
+                                MihomoNetworkMode.SystemProxy -> R.string.network_mode_system_proxy
+                                MihomoNetworkMode.VirtualNic -> R.string.network_mode_virtual_nic
+                            },
+                        ),
                         onToggleService = viewModel::toggleService,
                         onOpenSubscriptions = { onNavigate(Screen.Subscriptions.route) },
                         onOpenNodePicker = onOpenNodePicker,
@@ -210,8 +203,9 @@ fun DashboardScreen(
                             DashboardCardRenderer(
                                 cardGroup = cardGroup,
                                 uiState = uiState,
-                                serviceStatus = serviceStatus,
+                                serviceStatus = displayedServiceStatus,
                                 onClashModeSelected = viewModel::selectClashMode,
+                                onNetworkModeSelected = viewModel::selectNetworkMode,
                                 onNavigate = onNavigate,
                                 onRefreshIp = { viewModel.refreshIpInfo(force = true) },
                                 modifier =
@@ -227,8 +221,9 @@ fun DashboardScreen(
                         DashboardCardRenderer(
                             cardGroup = cardGroup,
                             uiState = uiState,
-                            serviceStatus = serviceStatus,
+                            serviceStatus = displayedServiceStatus,
                             onClashModeSelected = viewModel::selectClashMode,
+                            onNetworkModeSelected = viewModel::selectNetworkMode,
                             onNavigate = onNavigate,
                             onRefreshIp = { viewModel.refreshIpInfo(force = true) },
                         )

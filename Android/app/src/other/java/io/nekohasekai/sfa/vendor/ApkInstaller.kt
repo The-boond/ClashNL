@@ -2,9 +2,11 @@ package io.nekohasekai.sfa.vendor
 
 import android.content.Context
 import io.nekohasekai.sfa.Application
-import io.nekohasekai.sfa.bg.BoxService
 import io.nekohasekai.sfa.bg.RootClient
 import io.nekohasekai.sfa.database.Settings
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
+import io.nekohasekai.sfa.mihomo.MihomoRuntimeState
+import io.nekohasekai.sfa.runtime.ProfileRuntime
 import io.nekohasekai.sfa.utils.HookStatusClient
 import io.nekohasekai.sfa.xposed.XposedActivation
 import kotlinx.coroutines.delay
@@ -19,16 +21,12 @@ enum class InstallMethod {
 object ApkInstaller {
 
     private suspend fun stopServiceIfRunning() {
-        val commandSocket = File(Application.application.filesDir, "command.sock")
-        if (!commandSocket.exists()) {
-            return
-        }
-        BoxService.stop()
+        val controller = MihomoRuntimeRepository.controller(Application.application)
+        if (controller.runtimeState.value == MihomoRuntimeState.Stopped) return
+        ProfileRuntime.stopActive(Application.application)
         repeat(20) {
             delay(100)
-            if (!commandSocket.exists()) {
-                return
-            }
+            if (controller.runtimeState.value == MihomoRuntimeState.Stopped) return
         }
     }
 

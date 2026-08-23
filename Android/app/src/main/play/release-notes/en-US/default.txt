@@ -1,5 +1,8 @@
-ClashNL Android v1.0.8.
+ClashNL Android v1.1.0.
 
-- Keep subscription node endpoints on IPv4.
-- Bind account and subscription HTTP traffic to the underlying non-VPN network.
-- Prefer IPv4 while retaining NAT64 fallback on IPv6-only mobile networks.
+- Rebuilt around a single native Mihomo runtime.
+- Removed account login, plan purchase, and account synchronization.
+- Import and validate Clash/Mihomo YAML subscriptions directly.
+- Select nodes, run latency tests, and choose Rule/Global/Direct before VPN startup.
+- Switch between Android system proxy and full virtual NIC modes on the dashboard.
+- Fixed public IP routing, offline latency testing, persistence, and startup races.

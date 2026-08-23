@@ -4,6 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import io.nekohasekai.sfa.compose.navigation.Screen
 import io.nekohasekai.sfa.constant.Status
+import io.nekohasekai.sfa.mihomo.MihomoNetworkMode
 
 @Composable
 fun DashboardCardRenderer(
@@ -12,6 +13,7 @@ fun DashboardCardRenderer(
     modifier: Modifier = Modifier,
     serviceStatus: Status = Status.Stopped,
     onClashModeSelected: (String) -> Unit,
+    onNetworkModeSelected: (MihomoNetworkMode) -> Unit,
     onNavigate: (String) -> Unit,
     onRefreshIp: () -> Unit,
 ) {
@@ -38,7 +40,8 @@ fun DashboardCardRenderer(
         CardGroup.NetworkSettings ->
             NetworkSettingsCard(
                 serviceStatus = serviceStatus,
-                onOpenSettings = { onNavigate("settings/service") },
+                networkMode = uiState.networkMode,
+                onModeSelected = onNetworkModeSelected,
                 modifier = modifier,
             )
 
@@ -48,6 +51,7 @@ fun DashboardCardRenderer(
                     modes = uiState.clashModes,
                     selectedMode = uiState.selectedClashMode,
                     onModeSelected = onClashModeSelected,
+                    enabled = serviceStatus == Status.Stopped || serviceStatus == Status.Started,
                     modifier = modifier,
                 )
             } else {
@@ -60,12 +64,6 @@ fun DashboardCardRenderer(
         CardGroup.TrafficStats ->
             TrafficStatsCard(
                 uiState = uiState,
-                modifier = modifier,
-            )
-
-        CardGroup.WebsiteTest ->
-            WebsiteTestCard(
-                onOpenTest = { onNavigate("tools/network_quality") },
                 modifier = modifier,
             )
 

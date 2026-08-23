@@ -46,6 +46,16 @@ class LatencyTestCoordinator(
         onUpdate: (NodeLatencyResult) -> Unit,
     ) {
         if (targets.isEmpty()) return
+        val pendingTargets = targets.filter { target ->
+            val fresh = repository.getFresh(target)
+            if (fresh == null) {
+                true
+            } else {
+                onUpdate(fresh.copy(status = LatencyResultStatus.CACHED))
+                false
+            }
+        }
+        if (pendingTargets.isEmpty()) return
         var probe: LatencyProbe? = null
         try {
             val openedProbe = try {
@@ -53,7 +63,8 @@ class LatencyTestCoordinator(
             } catch (exception: CancellationException) {
                 throw exception
             } catch (exception: Exception) {
-                targets.forEach { target ->
+                currentCoroutineContext().ensureActive()
+                pendingTargets.forEach { target ->
                     val result = LatencyAggregator.aggregate(
                         target = target,
                         firstConnect = LatencySample.failure(exception.message),
@@ -69,7 +80,7 @@ class LatencyTestCoordinator(
             probe = openedProbe
             val semaphore = Semaphore(maxConcurrency.coerceAtLeast(1))
             coroutineScope {
-                targets.map { target ->
+                pendingTargets.map { target ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
                             runTarget(target, openedProbe, onUpdate)
@@ -89,12 +100,6 @@ class LatencyTestCoordinator(
         probe: LatencyProbe,
         onUpdate: (NodeLatencyResult) -> Unit,
     ) {
-        val fresh = repository.getFresh(target)
-        if (fresh != null) {
-            onUpdate(fresh.copy(status = LatencyResultStatus.CACHED))
-            return
-        }
-
         onUpdate(repository.markTesting(target))
         try {
             val firstConnect = sampleWithTimeout(probe, target)
@@ -111,6 +116,7 @@ class LatencyTestCoordinator(
             onUpdate(repository.get(target.key) ?: NodeLatencyResult.cancelled(target))
             throw cancelled
         } catch (exception: Exception) {
+            currentCoroutineContext().ensureActive()
             val result = LatencyAggregator.aggregate(
                 target = target,
                 firstConnect = LatencySample.failure(exception.message),

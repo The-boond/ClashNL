@@ -12,7 +12,6 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.LifecycleOwner
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.qrs.QRSDecoder
 import io.nekohasekai.sfa.qrs.readIntLE
 import io.nekohasekai.sfa.vendor.Vendor
@@ -368,8 +367,8 @@ class QRScanViewModel(application: Application) : AndroidViewModel(application) 
                 Log.d(TAG, "Not official QRS format, using raw data")
                 data
             }
-            Log.d(TAG, "Decoding profile content, size: ${actualData.size}")
-            Libbox.decodeProfileContent(actualData)
+            require(actualData.isNotEmpty()) { "Empty QRS profile" }
+            Log.d(TAG, "Decoded QRS YAML payload, size: ${actualData.size}")
             _uiState.update { it.copy(result = QRScanResult.QRSData(actualData)) }
         } catch (e: Exception) {
             _uiState.update { it.copy(errorMessage = e.message) }

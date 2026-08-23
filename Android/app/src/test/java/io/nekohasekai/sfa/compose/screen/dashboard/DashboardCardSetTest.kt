@@ -5,9 +5,9 @@ import org.junit.Test
 
 class DashboardCardSetTest {
     @Test
-    fun keepsOnlyProxyModeAndTrafficAsConfigurableCards() {
+    fun keepsNetworkModeProxyModeAndTrafficAsConfigurableCards() {
         assertEquals(
-            listOf(CardGroup.ProxyMode, CardGroup.TrafficStats),
+            listOf(CardGroup.NetworkSettings, CardGroup.ProxyMode, CardGroup.TrafficStats),
             configurableDashboardCards,
         )
     }

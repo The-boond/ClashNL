@@ -22,5 +22,12 @@ encryption compatibility code under Core/overlay/transport is adapted from
 MetaCubeX/mihomo under GPL-3.0-or-later:
   https://github.com/MetaCubeX/mihomo
 
+The Android package includes the 2026-08-22 country-lite.mmdb snapshot from
+MetaCubeX/meta-rules-dat under GPL-3.0. It allows Mihomo profiles using GeoIP
+DNS filtering to start without an initial network download. Source and license:
+  https://github.com/MetaCubeX/meta-rules-dat
+SHA-256:
+  248b91c2c9cf46c9ae75b27ab8bee7b44d3f745b6a1372da75b2120494284f7b
+
 ClashNl is an independent project and does not imply association with SagerNet,
 MetaCubeX, Dreamacro, or Shadowrocket.

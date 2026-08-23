@@ -1,7 +1,8 @@
 package io.nekohasekai.sfa.utils
 
-import io.nekohasekai.libbox.Libbox
 import io.nekohasekai.sfa.BuildConfig
+import io.nekohasekai.sfa.config.MihomoProfileContent
+import io.nekohasekai.sfa.repository.RemoteProfileUrlPolicy
 import okhttp3.Request
 import java.io.Closeable
 import java.util.Locale
@@ -18,8 +19,8 @@ class HTTPClient : Closeable {
             userAgent += BuildConfig.VERSION_NAME
             userAgent += " ("
             userAgent += BuildConfig.VERSION_CODE
-            userAgent += "; sing-box "
-            userAgent += Libbox.version()
+            userAgent += "; mihomo "
+            userAgent += BuildConfig.CORE_VERSION
             userAgent += "; language "
             userAgent += Locale.getDefault().toLanguageTag().replace("-", "_")
             userAgent += ")"
@@ -28,34 +29,43 @@ class HTTPClient : Closeable {
 
         /**
          * Subscription endpoints commonly select a response format from the
-         * User-Agent. Keep this token compatible with sing-box providers while
-         * retaining the branded UA for ordinary diagnostics and API calls.
+         * User-Agent. Request the Clash/Mihomo representation consistently.
          */
         val subscriptionUserAgent by lazy {
-            "sing-box/${Libbox.version()}"
+            "clash.meta/${BuildConfig.CORE_VERSION}"
         }
 
-        /** Requests the Clash/Mihomo subscription representation from XBoard. */
+        /** Requests the Clash/Mihomo representation from a subscription endpoint. */
         val mihomoSubscriptionUserAgent by lazy {
-            "clash.meta/${BuildConfig.VERSION_NAME}"
+            subscriptionUserAgent
         }
     }
 
     fun get(
         url: String,
         requestUserAgent: String = userAgent,
+        networkRoute: AppHttpTransport.NetworkRoute = AppHttpTransport.NetworkRoute.Underlying,
     ): Response {
+        val validatedUrl = RemoteProfileUrlPolicy.validate(url)
         val request = Request.Builder()
-            .url(url)
+            .url(validatedUrl)
             .header("User-Agent", requestUserAgent)
             .header("Accept", "*/*")
             .build()
         try {
-            return AppHttpTransport.execute(request, preferLocalSocks = true).use { response ->
-                val content = response.body?.string().orEmpty()
+            return AppHttpTransport.execute(
+                request,
+                preferLocalSocks = true,
+                networkRoute = networkRoute,
+            ).use { response ->
                 if (!response.isSuccessful) {
                     throw IllegalStateException("订阅请求失败（HTTP ${response.code}）")
                 }
+                RemoteProfileUrlPolicy.validate(response.request.url.toString())
+                val body = response.body
+                val content = body?.byteStream()?.use { stream ->
+                    MihomoProfileContent.readUtf8(stream, body.contentLength())
+                }.orEmpty()
                 if (content.isBlank()) {
                     throw IllegalStateException("订阅响应为空")
                 }
@@ -77,6 +87,9 @@ class HTTPClient : Closeable {
     }
 
     fun getString(url: String): String = get(url).content
+
+    /** Queries through Android's active route so VPN diagnostics observe the real tunnel exit. */
+    fun getStringViaActiveNetwork(url: String): String = get(url, networkRoute = AppHttpTransport.NetworkRoute.Active).content
 
     fun getSubscription(url: String): Response = get(url, subscriptionUserAgent)
 
