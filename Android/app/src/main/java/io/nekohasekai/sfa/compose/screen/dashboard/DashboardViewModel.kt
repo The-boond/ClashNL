@@ -488,14 +488,6 @@ class DashboardViewModel :
         }
     }
 
-    fun shareProfile(profile: Profile) {
-        // Handled directly in ProfilesCard
-    }
-
-    fun shareProfileURL(profile: Profile) {
-        // Handled directly in ProfilesCard
-    }
-
     fun updateProfile(profile: Profile) {
         if (profile.typed.type != TypedProfile.Type.Remote) return
 

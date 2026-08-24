@@ -56,7 +56,6 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import io.nekohasekai.sfa.R
-import io.nekohasekai.sfa.bg.ServiceConnection
 import io.nekohasekai.sfa.compose.base.UiEvent
 import io.nekohasekai.sfa.compose.base.rememberApplyServiceChangeNotifier
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
@@ -71,7 +70,6 @@ import kotlinx.coroutines.withContext
 @Composable
 fun ServiceSettingsScreen(
     navController: NavController,
-    serviceConnection: ServiceConnection? = null,
     serviceStatus: Status = Status.Stopped,
 ) {
     OverrideTopBar {

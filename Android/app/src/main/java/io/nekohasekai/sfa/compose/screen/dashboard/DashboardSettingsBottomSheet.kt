@@ -51,7 +51,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,7 +86,6 @@ fun DashboardSettingsBottomSheet(
     }
 
     val hapticFeedback = LocalHapticFeedback.current
-    val scope = rememberCoroutineScope()
     val listState = rememberLazyListState()
 
     // Dragging state

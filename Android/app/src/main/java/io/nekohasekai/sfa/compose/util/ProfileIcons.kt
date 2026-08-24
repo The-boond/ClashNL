@@ -1,7 +1,5 @@
 package io.nekohasekai.sfa.compose.util
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
 import androidx.compose.ui.graphics.vector.ImageVector
 import io.nekohasekai.sfa.compose.util.icons.MaterialIconsLibrary
 
@@ -15,11 +13,6 @@ object ProfileIcons {
     fun getIconById(id: String?): ImageVector? {
         if (id == null) return null
         return MaterialIconsLibrary.getIconById(id)
-    }
-
-    fun getDefaultIconForType(isRemote: Boolean): ImageVector {
-        // Use the same default icon for all profile types
-        return Icons.AutoMirrored.Default.InsertDriveFile
     }
 
     fun getCategoryForIcon(iconId: String): String? = MaterialIconsLibrary.getCategoryForIcon(iconId)

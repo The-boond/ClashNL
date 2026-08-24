@@ -34,9 +34,6 @@ import java.net.Inet6Address
 import java.net.InetSocketAddress
 import java.net.InterfaceAddress
 import java.net.NetworkInterface
-import java.security.KeyStore
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
 import io.nekohasekai.libbox.NeighborEntry as LibboxNeighborEntry
 import io.nekohasekai.libbox.NetworkInterface as LibboxNetworkInterface
 

@@ -43,18 +43,18 @@ object DefaultNetworkMonitor {
     private fun checkDefaultInterfaceUpdate(newNetwork: Network?) {
         val listener = listener ?: return
         if (newNetwork != null) {
-            for (times in 0 until 10) {
+            repeat(10) {
                 val linkProperties = Application.connectivity.getLinkProperties(newNetwork)
                 if (linkProperties == null) {
                     Thread.sleep(100)
-                    continue
+                    return@repeat
                 }
                 var interfaceIndex: Int
                 try {
                     interfaceIndex = NetworkInterface.getByName(linkProperties.interfaceName).index
                 } catch (e: Exception) {
                     Thread.sleep(100)
-                    continue
+                    return@repeat
                 }
                 listener.updateDefaultInterface(linkProperties.interfaceName, interfaceIndex, false, false)
             }

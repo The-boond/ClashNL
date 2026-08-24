@@ -74,7 +74,6 @@ import io.nekohasekai.sfa.database.TypedProfile
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EditProfileScreen(
-    profileId: Long,
     onNavigateBack: () -> Unit,
     onNavigateToEditContent: (isReadOnly: Boolean) -> Unit = {},
     viewModel: EditProfileViewModel = viewModel(),

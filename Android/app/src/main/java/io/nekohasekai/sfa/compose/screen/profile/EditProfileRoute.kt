@@ -61,7 +61,6 @@ fun EditProfileRoute(profileId: Long, onNavigateBack: () -> Unit, modifier: Modi
             },
         ) {
             EditProfileScreen(
-                profileId = profileId,
                 onNavigateBack = onNavigateBack,
                 onNavigateToEditContent = { isReadOnly ->
                     navController.navigate("edit_content/$isReadOnly") {

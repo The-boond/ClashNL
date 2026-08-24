@@ -12,8 +12,6 @@ import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.mihomo.MihomoConfig
 import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
 import io.nekohasekai.sfa.repository.ProfileRemoteRepository
-import io.nekohasekai.sfa.repository.SubscriptionMetadataParser
-import io.nekohasekai.sfa.utils.HTTPClient
 import io.nekohasekai.sfa.utils.ProfileConfigStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

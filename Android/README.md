@@ -68,13 +68,17 @@ ALIAS_PASS=CHANGE_ME
 
 ## 验证
 
-```bash
-bash scripts/verify-core.sh
+```powershell
+.\gradlew.bat :app:spotlessCheck :app:testOtherDebugUnitTest `
+  :app:lintVitalOtherRelease :app:assembleOtherRelease `
+  :app:assembleOtherDebugAndroidTest
 ```
 
-导入测试可使用仓库中的 `Examples/clash-modern.yaml`。安装 debug APK 后，
-应覆盖 IPv4/IPv6、TCP/UDP、DNS、防休眠、Wi‑Fi/蜂窝切换、锁屏恢复、
-订阅更新、分应用代理和长期前台运行。
+原生核心来自 `Core/mihomo-android` 子模块，应用桥接代码位于
+`Core/mihomo-bridge` 与 `mihomo-bridge`。导入测试可使用仓库中的
+`Examples/clash-modern.yaml`。安装 debug APK 后，应覆盖 IPv4/IPv6、
+TCP/UDP、DNS、防休眠、Wi‑Fi/蜂窝切换、锁屏恢复、订阅更新、分应用代理
+和长期前台运行。
 
 ## 发布
 

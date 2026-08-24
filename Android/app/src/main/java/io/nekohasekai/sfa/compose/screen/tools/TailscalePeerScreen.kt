@@ -75,7 +75,6 @@ fun TailscalePeerScreen(
     endpointTag: String,
     peerId: String,
 ) {
-    val state by viewModel.uiState.collectAsState()
     val peer = viewModel.peer(endpointTag, peerId)
     val endpoint = viewModel.endpoint(endpointTag)
     val isSelf = endpoint?.selfPeer?.id == peerId
@@ -148,7 +147,7 @@ fun TailscalePeerScreen(
     ) {
         // Network section (self peer only): network name + logout
         val networkName = endpoint?.networkName
-        val showLogout = isSelf && endpoint?.backendState == "Running" && endpoint?.keyAuth == false
+        val showLogout = isSelf && endpoint.backendState == "Running" && !endpoint.keyAuth
         if (isSelf && (!networkName.isNullOrEmpty() || showLogout)) {
             SectionHeader(stringResource(R.string.tailscale_network))
             Card(
