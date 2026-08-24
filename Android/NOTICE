@@ -1,26 +1,25 @@
 ClashNl for Android
 ===================
 
-This directory is a modified distribution of SagerNet/sing-box-for-android at
-commit 106e8527416a665ebb04d32f6fdd454ae7de49d1 and links a modified sing-box
-Libbox AAR at commit 03c3bf4c01e7b1fd165d0c46ff376828fa878aab
-(v1.14.0-beta.2).
+ClashNl is based on the Android client architecture from
+SagerNet/sing-box-for-android and uses the Mihomo core sources provided by the
+MetaCubeX/ClashMetaForAndroid submodule at commit
+c454d0e73b047d9f4c0173e8d35088f08b65bc98.
 
 Upstream sources:
   https://github.com/SagerNet/sing-box-for-android
-  https://github.com/SagerNet/sing-box
-  https://github.com/SagerNet/termux-app
-
-The Android client and sing-box core are distributed under GNU General Public
-License version 3 or later. The copied client license is in LICENSE. The
-Termux terminal component license is in third_party/termux-app/LICENSE.md.
-
-ClashNl changes include independent branding and package ID, Clash/Mihomo YAML
-conversion, Clash/Clash Meta import links, Android privacy disclosure, and
-shared protocol examples. The client-side XHTTP framing and VLESS post-quantum
-encryption compatibility code under Core/overlay/transport is adapted from
-MetaCubeX/mihomo under GPL-3.0-or-later:
+  https://github.com/MetaCubeX/ClashMetaForAndroid
   https://github.com/MetaCubeX/mihomo
+  https://github.com/termux/termux-app
+
+The Android client, Mihomo core, and Termux terminal components are distributed
+under GNU General Public License version 3 or later. The project license is in
+LICENSE, and the Termux component license is in
+third_party/termux-app/LICENSE.md.
+
+ClashNl changes include independent branding and package ID, a single native
+Mihomo runtime, Clash/Clash Meta import links, Android privacy disclosure, and
+shared protocol examples.
 
 The Android package includes the 2026-08-22 country-lite.mmdb snapshot from
 MetaCubeX/meta-rules-dat under GPL-3.0. It allows Mihomo profiles using GeoIP

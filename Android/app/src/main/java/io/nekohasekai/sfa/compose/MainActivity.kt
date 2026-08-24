@@ -25,7 +25,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.UnfoldLess
 import androidx.compose.material.icons.filled.UnfoldMore
@@ -72,7 +71,6 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import dev.jeziellago.compose.markdowntext.MarkdownText
-import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.BuildConfig
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.bg.ServiceConnection
@@ -840,8 +838,6 @@ class MainActivity :
                 else -> currentRoute
             }
         val isConnectionsRoute = currentRootRoute == Screen.Connections.route
-        val isSubscriptionsRoute = currentRootRoute == Screen.Subscriptions.route
-        val isGroupsRoute = currentRootRoute == Screen.Groups.route
         val isLogRoute = currentRootRoute == Screen.Log.route
 
         val isSubScreen = isSettingsSubScreen || isConnectionsDetail || isProfileRoute

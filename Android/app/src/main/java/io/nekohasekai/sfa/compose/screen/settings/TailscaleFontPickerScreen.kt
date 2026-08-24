@@ -7,7 +7,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,7 +39,6 @@ import androidx.navigation.NavController
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.database.Settings
-import io.nekohasekai.sfa.terminal.ImportedFont
 import io.nekohasekai.sfa.terminal.ImportedFontStore
 
 private val knownMonospaceFamilies = listOf(
@@ -199,7 +197,6 @@ private fun enumerateSystemMonospaceFonts(): List<String> {
 
     val families = mutableSetOf<String>()
     try {
-        val monoReference = Typeface.MONOSPACE
         for (family in knownMonospaceFamilies) {
             val typeface = Typeface.create(family, Typeface.NORMAL)
             if (typeface != Typeface.DEFAULT) {

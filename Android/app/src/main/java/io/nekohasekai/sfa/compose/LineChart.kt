@@ -83,7 +83,6 @@ fun LineChart(
                 val pointIndex = (i * progress).toInt().coerceAtMost(points.size - 1)
 
                 if (i <= pointIndex) {
-                    val prev = points[i - 1]
                     val current = points[i]
 
                     // Simple line connection

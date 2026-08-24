@@ -24,8 +24,6 @@ object VpnAppStore {
     private val appGlobalsClass by lazy { Class.forName("android.app.AppGlobals") }
     private val getPackageManagerMethod by lazy { appGlobalsClass.getMethod("getPackageManager") }
 
-    @Volatile
-    private var pmClass: Class<*>? = null
     private var getPackagesForUidMethod: Method? = null
     private var getInstalledPackagesMethodLong: Method? = null
     private var getInstalledPackagesMethodInt: Method? = null
@@ -74,6 +72,7 @@ object VpnAppStore {
                 when (val raw = method.invoke(pm, uid)) {
                     is Array<*> -> raw.filterIsInstance<String>()
                     is List<*> -> raw.filterIsInstance<String>()
+                    null -> emptyList()
                     else -> emptyList()
                 }
             } catch (e: Throwable) {

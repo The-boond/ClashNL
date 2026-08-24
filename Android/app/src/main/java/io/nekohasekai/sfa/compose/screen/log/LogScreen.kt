@@ -75,7 +75,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -123,7 +122,6 @@ fun LogScreen(
     val windowSizeClass = currentWindowAdaptiveInfo().windowSizeClass
     val isTablet = windowSizeClass.isWidthAtLeastBreakpointCompat(WindowSizeClassCompat.WIDTH_DP_MEDIUM_LOWER_BOUND)
     val listState = rememberLazyListState()
-    val coroutineScope = rememberCoroutineScope()
     val resolvedTitle = title ?: stringResource(R.string.title_log)
     val remoteServer by RemoteControlManager.remoteServer.collectAsState()
     val emptyStateMessage = emptyMessage ?: stringResource(R.string.privilege_settings_hook_logs_empty)
@@ -516,7 +514,6 @@ fun LogScreen(
                     ) { index, log ->
                         LogItem(
                             annotatedString = log.annotatedString,
-                            index = index,
                             isSelected = uiState.selectedLogIndices.contains(index),
                             isSelectionMode = uiState.isSelectionMode,
                             onLongClick = {
@@ -879,7 +876,6 @@ fun LogScreen(
 @Composable
 fun LogItem(
     annotatedString: androidx.compose.ui.text.AnnotatedString,
-    index: Int,
     isSelected: Boolean,
     isSelectionMode: Boolean,
     onLongClick: () -> Unit,

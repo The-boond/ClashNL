@@ -369,11 +369,6 @@ fun PrivilegeSettingsManageScreen(
                     )
                 }
                 PrivilegeSettingsMenus(
-                    sortMode = sortMode,
-                    sortReverse = sortReverse,
-                    hideSystemApps = hideSystemApps,
-                    hideOfflineApps = hideOfflineApps,
-                    hideDisabledApps = hideDisabledApps,
                     onSortModeChange = { mode ->
                         sortMode = mode
                         applyFilter()
@@ -551,11 +546,6 @@ fun PrivilegeSettingsManageScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PrivilegeSettingsMenus(
-    sortMode: SortMode,
-    sortReverse: Boolean,
-    hideSystemApps: Boolean,
-    hideOfflineApps: Boolean,
-    hideDisabledApps: Boolean,
     onSortModeChange: (SortMode) -> Unit,
     onSortReverseToggle: () -> Unit,
     onHideSystemAppsToggle: () -> Unit,

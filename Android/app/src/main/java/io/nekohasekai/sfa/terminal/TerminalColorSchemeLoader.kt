@@ -2,7 +2,6 @@ package io.nekohasekai.sfa.terminal
 
 import android.content.Context
 import android.graphics.Color
-import com.termux.terminal.TerminalColorScheme
 import com.termux.terminal.TerminalColors
 import java.util.Properties
 
