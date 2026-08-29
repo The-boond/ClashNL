@@ -15,10 +15,10 @@ public struct ConnectionListView: View {
     public var body: some View {
         VStack {
             if viewModel.isLoading {
-                Text("Loading...")
+                ProgressView("Loading connections…")
             } else {
                 if viewModel.connections.isEmpty {
-                    Text("Empty connections")
+                    emptyState
                 } else {
                     ScrollView {
                         LazyVStack {
@@ -32,6 +32,7 @@ public struct ConnectionListView: View {
             }
         }
         #if os(iOS)
+        .searchable(text: $viewModel.searchText, prompt: Text("Search connections"))
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 ConnectionMenuButton(
@@ -88,6 +89,33 @@ public struct ConnectionListView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
         #if os(iOS)
             .background(Color(uiColor: .systemGroupedBackground))
+        #endif
+    }
+
+    @ViewBuilder
+    private var emptyState: some View {
+        #if os(iOS)
+            if #available(iOS 17.0, *) {
+                ContentUnavailableView(
+                    "No Connections",
+                    systemImage: "arrow.left.arrow.right",
+                    description: Text("Active network connections will appear here while the VPN is running.")
+                )
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "arrow.left.arrow.right")
+                        .font(.largeTitle)
+                    Text("No Connections")
+                        .font(.headline)
+                    Text("Active network connections will appear here while the VPN is running.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+                .padding(32)
+            }
+        #else
+            Text("Empty connections")
         #endif
     }
 }

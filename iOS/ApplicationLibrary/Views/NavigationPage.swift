@@ -21,7 +21,10 @@ public enum NavigationPage: Int, CaseIterable, Identifiable {
 
     public static var allCases: [NavigationPage] {
         #if os(iOS)
-            return [.subscriptions, .logs, .dashboard, .tools, .settings]
+            // Keep the iPhone tab bar focused on the three primary workflows.
+            // Logs, connections and diagnostics remain available from Settings,
+            // where iOS users expect secondary destinations to live.
+            return [.dashboard, .subscriptions, .settings]
         #elseif os(macOS)
             return [.dashboard, .groups, .connections, .logs, .tools, .settings]
         #else
@@ -63,8 +66,12 @@ public extension NavigationPage {
     #endif
 
     var label: some View {
-        Label(title, systemImage: iconImage)
-            .tint(.textColor)
+        #if os(iOS)
+            Label(title, systemImage: iconImage)
+        #else
+            Label(title, systemImage: iconImage)
+                .tint(.textColor)
+        #endif
     }
 
     var title: String {
@@ -96,7 +103,7 @@ public extension NavigationPage {
             return "gauge"
         #if os(iOS)
             case .subscriptions:
-                return "cloud.fill"
+                return "rectangle.stack.fill"
         #endif
         #if os(macOS)
             case .groups:
@@ -109,7 +116,7 @@ public extension NavigationPage {
         case .tools:
             return "terminal.fill"
         case .settings:
-            return "gear.circle.fill"
+            return "gearshape.fill"
         }
     }
 

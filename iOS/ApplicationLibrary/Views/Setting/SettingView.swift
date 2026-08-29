@@ -19,11 +19,13 @@ public extension Notification.Name {
 }
 
 public enum SettingsPage: Hashable {
-    case app
+    case app, tools
     case core, packetTunnel, onDemandRules, profileOverride, remoteControl, sponsors
 }
 
 public struct SettingView: View {
+    @EnvironmentObject private var environments: ExtensionEnvironments
+
     private enum Tabs: Int, CaseIterable, Identifiable {
         var id: Self {
             self
@@ -143,6 +145,8 @@ public struct SettingView: View {
                 switch page {
                 case .app:
                     AppView()
+                case .tools:
+                    ToolsView()
                 case .core:
                     CoreView()
                 case .packetTunnel:
@@ -163,6 +167,7 @@ public struct SettingView: View {
 
     #if os(iOS)
         @State private var showRemoteControl = false
+        @State private var showTools = false
     #endif
 
     public init() {}
@@ -187,6 +192,42 @@ public struct SettingView: View {
                     }
                 #endif
             }
+            #if os(iOS)
+                Section("Activity & Diagnostics") {
+                    FormNavigationLink {
+                        GroupListView()
+                            .navigationTitle("Proxy Groups")
+                    } label: {
+                        Label("Proxy Groups", systemImage: "point.3.connected.trianglepath.dotted")
+                    }
+                    FormNavigationLink {
+                        ConnectionListView()
+                            .navigationTitle("Connections")
+                    } label: {
+                        Label("Connections", systemImage: "arrow.left.arrow.right")
+                    }
+                    FormNavigationLink {
+                        LogView()
+                            .navigationTitle("Logs")
+                            .navigationBarTitleDisplayMode(.inline)
+                    } label: {
+                        Label("Logs", systemImage: "text.alignleft")
+                    }
+                    NavigationLink(isActive: $showTools) {
+                        ToolsView()
+                            .navigationTitle("Diagnostics")
+                    } label: {
+                        Label("Diagnostics", systemImage: "wrench.and.screwdriver.fill")
+                            .badge(
+                                environmentsUnreadReportCount
+                            )
+                    }
+                    .onReceive(NotificationCenter.default.publisher(for: .navigateToSettingsPage)) { notification in
+                        guard let page = notification.object as? SettingsPage, page == .tools else { return }
+                        showTools = true
+                    }
+                }
+            #endif
             #if !os(tvOS)
                 Section("About") {
                     #if os(iOS)
@@ -209,13 +250,13 @@ public struct SettingView: View {
                             Text("Configuration")
                         }
                     }
-                    Link(destination: URL(string: String("https://github.com/SagerNet/sing-box"))!) {
-                        Label("Source Code", systemImage: "pills.fill")
+                    Link(destination: URL(string: String("https://github.com/The-boond/ClashNL"))!) {
+                        Label("ClashNL Source Code", systemImage: "chevron.left.forwardslash.chevron.right")
                     }
                     .buttonStyle(.plain)
                     .foregroundColor(.accentColor)
                     .contextMenu {
-                        Link(destination: URL(string: String("https://github.com/SagerNet/sing-box/releases"))!) {
+                        Link(destination: URL(string: String("https://github.com/The-boond/ClashNL/releases"))!) {
                             Text("Releases")
                         }
                     }
@@ -235,6 +276,10 @@ public struct SettingView: View {
             Self.destinationView(for: page)
         }
         #endif
+    }
+
+    private var environmentsUnreadReportCount: Int {
+        environments.totalUnreadReportCount
     }
 
     #if !os(tvOS)

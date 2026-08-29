@@ -1,5 +1,6 @@
 #if os(iOS)
 
+    import Libbox
     import Library
     import SwiftUI
 
@@ -21,6 +22,10 @@
                         VStack(alignment: .leading, spacing: 16) {
                             summaryCard
                             switchableProfileCard
+                            ProxyGroupsShortcut(
+                                commandClient: environments.commandClient,
+                                isConnected: environments.extensionProfile?.status.isConnectedStrict == true
+                            )
                         }
                         .padding()
                     }
@@ -32,6 +37,7 @@
             .alert(combinedAlert)
             .onAppear {
                 coordinator.setEnvironments(environments)
+                environments.connect()
                 Task {
                     await coordinator.reload()
                 }
@@ -54,15 +60,15 @@
                     DashboardCardHeader(
                         icon: "cloud.fill",
                         title: "Subscriptions",
-                        accent: .blue
+                        accent: .accentColor
                     )
                     Spacer()
                     Text("\(coordinator.profileList.count)")
                         .font(.headline)
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(Color.accentColor)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(Color.blue.opacity(0.12))
+                        .background(Color.accentColor.opacity(0.12))
                         .clipShape(Capsule())
                 }
             }
@@ -152,6 +158,88 @@
                 !profile.status.isSwitchable ||
                     selectionCoordinator.reasserting
             )
+        }
+    }
+
+    @MainActor
+    private struct ProxyGroupsShortcut: View {
+        @ObservedObject var commandClient: CommandClient
+        let isConnected: Bool
+
+        private var selectableGroups: [LibboxOutboundGroup] {
+            commandClient.groups?.filter(\.selectable) ?? []
+        }
+
+        var body: some View {
+            Group {
+                if isConnected {
+                    NavigationLink {
+                        GroupListView()
+                            .navigationTitle("Proxy Groups")
+                    } label: {
+                        cardContent
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    cardContent
+                        .opacity(0.72)
+                }
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityHint(
+                isConnected
+                    ? Text("Opens the proxy groups and nodes in the active subscription.")
+                    : Text("Connect the VPN to view proxy groups and nodes.")
+            )
+        }
+
+        private var cardContent: some View {
+            DashboardCardView(title: "") {
+                HStack(spacing: 12) {
+                    Image(systemName: "point.3.connected.trianglepath.dotted")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Color.accentColor)
+                        .frame(width: 40, height: 40)
+                        .background(Color.accentColor.opacity(0.12))
+                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Proxy Groups & Nodes")
+                            .font(.headline)
+                        Text(shortcutDescription)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer(minLength: 8)
+
+                    if isConnected {
+                        Text("\(selectableGroups.count)")
+                            .font(.caption.monospacedDigit().weight(.semibold))
+                            .foregroundStyle(Color.accentColor)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    } else {
+                        Image(systemName: "lock.fill")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    }
+                }
+            }
+        }
+
+        private var shortcutDescription: String {
+            guard isConnected else {
+                return String(localized: "Connect the VPN to load nodes")
+            }
+            if let group = selectableGroups.first,
+               !group.selected.isEmpty
+            {
+                return "\(group.tag) · \(group.selected)"
+            }
+            return String(localized: "Choose a proxy group and node")
         }
     }
 
