@@ -28,9 +28,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
       - uses: actions/setup-go@v5
         with:
-          go-version: '1.25.12'
+          go-version-file: Android/Core/mihomo-bridge/native/go.mod
           cache-dependency-path: Android/Core/mihomo-bridge/native/go.sum
       - name: Verify Android Mihomo bridge
         working-directory: Android/Core/mihomo-bridge/native
