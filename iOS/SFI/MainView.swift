@@ -82,7 +82,11 @@ struct MainView: View {
     private var accessoryInset: some View {
         if environments.remoteServer != nil {
             remoteStatusBarPill
-        } else if let profile = environments.extensionProfile, !environments.extensionProfileLoading, !environments.emptyProfiles {
+        } else if selection != .dashboard,
+                  let profile = environments.extensionProfile,
+                  !environments.extensionProfileLoading,
+                  !environments.emptyProfiles
+        {
             AccessoryInset(
                 profile: profile,
                 showDisconnectedFAB: selection != .dashboard
@@ -275,7 +279,12 @@ struct MainView: View {
                 Task {
                     await environments.crashReportManager.refresh()
                     await environments.oomReportManager.refresh()
-                    selection = .tools
+                    selection = .settings
+                    try? await Task.sleep(nanoseconds: NSEC_PER_MSEC * 250)
+                    NotificationCenter.default.post(
+                        name: .navigateToSettingsPage,
+                        object: SettingsPage.tools
+                    )
                 }
             }
             .onReceive(NotificationCenter.default.publisher(for: .navigateToSettingsPage)) { notification in

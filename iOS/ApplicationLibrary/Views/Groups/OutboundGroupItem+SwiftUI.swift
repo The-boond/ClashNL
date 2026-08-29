@@ -6,12 +6,14 @@ public extension OutboundGroupItem {
         switch urlTestDelay {
         case 0:
             return .gray
-        case ..<800:
+        case ...250:
             return .green
-        case 800 ..< 1500:
-            return .yellow
-        default:
+        case ...350:
+            return .blue
+        case ...600:
             return .orange
+        default:
+            return .red
         }
     }
 }

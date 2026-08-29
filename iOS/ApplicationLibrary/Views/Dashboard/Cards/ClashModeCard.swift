@@ -18,7 +18,7 @@ public struct ClashModeCard: View {
         if shouldShowPicker {
             DashboardCardView(title: "", isHalfWidth: false) {
                 VStack(alignment: .leading, spacing: 12) {
-                    DashboardCardHeader(icon: "arrow.triangle.branch", title: "Mode", accent: .purple)
+                    DashboardCardHeader(icon: "arrow.triangle.branch", title: "Mode", accent: .accentColor)
                     #if os(tvOS)
                         modeMenu
                     #else

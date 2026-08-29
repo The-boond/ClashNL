@@ -22,11 +22,7 @@ final class SnapshotTests: XCTestCase {
 
     func test02Logs() {
         #if os(iOS)
-            if app.tabBars.buttons["Logs"].exists {
-                app.tabBars.buttons["Logs"].firstMatch.tap()
-            } else if app.buttons["Logs"].exists {
-                app.buttons["Logs"].firstMatch.tap()
-            }
+            openSettingsDestination("Logs")
         #elseif os(macOS)
             if app.outlines.staticTexts["Logs"].exists {
                 app.outlines.staticTexts["Logs"].click()
@@ -70,5 +66,17 @@ final class SnapshotTests: XCTestCase {
         #endif
         sleep(1)
         snapshot("03_Settings")
+    }
+
+    private func openSettingsDestination(_ destination: String) {
+        if app.tabBars.buttons["Settings"].exists {
+            app.tabBars.buttons["Settings"].firstMatch.tap()
+        } else if app.buttons["Settings"].exists {
+            app.buttons["Settings"].firstMatch.tap()
+        }
+        let row = app.staticTexts[destination].firstMatch
+        if row.waitForExistence(timeout: 2) {
+            row.tap()
+        }
     }
 }

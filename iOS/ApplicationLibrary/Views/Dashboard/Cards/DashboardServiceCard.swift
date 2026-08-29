@@ -27,13 +27,28 @@
             profileList.first { $0.id == selectedProfileID }
         }
 
-        private var currentNode: String {
+        private var currentProxySelection: String {
             guard profile.status.isConnected else {
                 return String(localized: "No active node")
             }
-            return commandClient.groups?
-                .first(where: { $0.selectable && !$0.selected.isEmpty })?
-                .selected ?? String(localized: "No active node")
+            let selectableGroups = commandClient.groups?
+                .filter { $0.selectable && !$0.selected.isEmpty } ?? []
+            let isGlobalMode = commandClient.clashMode.compare(
+                "global",
+                options: [.caseInsensitive, .diacriticInsensitive]
+            ) == .orderedSame
+            let group: LibboxOutboundGroup?
+            if isGlobalMode {
+                group = selectableGroups.first
+            } else {
+                group = selectableGroups.first {
+                    $0.tag.caseInsensitiveCompare("GLOBAL") != .orderedSame
+                } ?? selectableGroups.first
+            }
+            guard let group else {
+                return String(localized: "No active node")
+            }
+            return "\(group.tag) · \(group.selected)"
         }
 
         private var currentMode: String {
@@ -65,19 +80,19 @@
                             icon: "cloud.fill",
                             label: String(localized: "Subscription"),
                             value: selectedProfile?.name ?? String(localized: "Not available"),
-                            accent: .blue
+                            accent: .accentColor
                         )
                         informationRow(
                             icon: "network",
-                            label: String(localized: "Current Node"),
-                            value: currentNode,
+                            label: String(localized: "Proxy Group & Node"),
+                            value: currentProxySelection,
                             accent: .green
                         )
                         informationRow(
                             icon: "arrow.triangle.branch",
                             label: String(localized: "Mode"),
                             value: currentMode,
-                            accent: .purple
+                            accent: .accentColor
                         )
                     }
 
