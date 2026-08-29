@@ -115,11 +115,13 @@
     <string name="latency_status_expired">已过期</string>
     <string name="latency_status_cached">缓存</string>
     <string name="profile_tap_to_choose_node">点击此配置选择节点</string>
+    <string name="subscription_choose_group_hint">点击代理组查看并切换节点</string>
+    <string name="subscription_proxy_groups">代理组</string>
     <string name="drag_handle_to_reorder">拖动手柄重新排序项目</string>
     <string name="drag_to_reorder">拖动重新排序</string>
     <string name="reset_order">重置顺序</string>
     <string name="dashboard_subscriptions_card">订阅</string>
-    <string name="dashboard_current_proxy">当前节点</string>
+    <string name="dashboard_current_proxy">当前代理组与节点</string>
     <string name="dashboard_network_settings">网络设置</string>
     <string name="dashboard_proxy_mode">代理模式</string>
     <string name="dashboard_traffic_stats">流量统计</string>

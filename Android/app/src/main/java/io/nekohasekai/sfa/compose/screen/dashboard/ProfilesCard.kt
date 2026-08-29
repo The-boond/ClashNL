@@ -38,7 +38,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -174,11 +173,6 @@ fun ProfilesCard(
     }
 
     var expandedProfileId by rememberSaveable { mutableStateOf<Long?>(null) }
-    LaunchedEffect(selectedProfileId) {
-        if (selectedProfileId != -1L) {
-            expandedProfileId = selectedProfileId
-        }
-    }
 
     Column(
         modifier = Modifier.fillMaxWidth(),

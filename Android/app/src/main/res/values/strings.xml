@@ -115,11 +115,13 @@
     <string name="latency_status_expired">Expired</string>
     <string name="latency_status_cached">Cached</string>
     <string name="profile_tap_to_choose_node">Tap this profile to choose a node</string>
+    <string name="subscription_choose_group_hint">Tap a proxy group to view and switch nodes</string>
+    <string name="subscription_proxy_groups">Proxy groups</string>
     <string name="drag_handle_to_reorder">Drag handle to reorder items</string>
     <string name="drag_to_reorder">Drag to reorder</string>
     <string name="reset_order">Reset order</string>
     <string name="dashboard_subscriptions_card">Subscription</string>
-    <string name="dashboard_current_proxy">Current Proxy</string>
+    <string name="dashboard_current_proxy">Current proxy group and node</string>
     <string name="dashboard_network_settings">Network Settings</string>
     <string name="dashboard_proxy_mode">Proxy Mode</string>
     <string name="dashboard_traffic_stats">Traffic Statistics</string>

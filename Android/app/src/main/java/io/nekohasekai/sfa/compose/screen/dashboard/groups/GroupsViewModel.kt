@@ -59,6 +59,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 data class GroupsUiState(
     val groups: List<Group> = emptyList(),
+    val profileId: Long = -1L,
+    val proxyMode: String = "rule",
     val isLoading: Boolean = false,
     val expandedGroups: Set<String> = emptySet(),
     val testingGroups: Set<String> = emptySet(),
@@ -83,6 +85,7 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
     private val selectionJobs = ConcurrentHashMap<String, Job>()
     private val liveSequence = AtomicLong(0)
     private val offlineRefreshSequence = AtomicLong(0)
+    private val autoTestRequestedProfiles = mutableSetOf<Long>()
     private val _liveGroupUpdates = MutableSharedFlow<LiveGroupUpdate>(replay = 1, extraBufferCapacity = 1)
     val liveGroupUpdates = _liveGroupUpdates
     private val _serviceStatus = MutableStateFlow(Status.Stopped)
@@ -261,6 +264,8 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
                 updateState {
                     copy(
                         groups = overlayGroups(groups, currentNetworkKey()),
+                        profileId = profileId,
+                        proxyMode = Settings.mihomoClashMode,
                         isLoading = false,
                     )
                 }
@@ -302,10 +307,15 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
         }
 
         val currentByTag = uiState.value.groups.associateBy { it.tag }
+        val mode = runCatching { controller.getMode() }
+            .getOrDefault(Settings.mihomoClashMode)
+            .trim()
+            .lowercase()
         val groups = try {
             MihomoProxyGroupRepository(controller)
                 .getGroups()
                 .map { it.toGroup(currentByTag[it.name]) }
+                .visibleForMode(mode)
         } catch (e: Exception) {
             withContext(Dispatchers.Main) {
                 if (isUsingMihomo && Settings.selectedProfile == profileId) {
@@ -323,14 +333,11 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
         withContext(Dispatchers.Main) {
             if (!isUsingMihomo || Settings.selectedProfile != profileId) return@withContext
             updateState {
-                val initialExpandedGroups = if (expandedGroups.isEmpty() && groups.isNotEmpty()) {
-                    groups.filter { it.selectable }.map { it.tag }.toSet()
-                } else {
-                    expandedGroups
-                }
                 copy(
                     groups = overlayGroups(groups, currentNetworkKey()),
-                    expandedGroups = initialExpandedGroups,
+                    profileId = profileId,
+                    proxyMode = mode,
+                    expandedGroups = expandedGroups.intersect(groups.map { it.tag }.toSet()),
                     isLoading = false,
                 )
             }
@@ -416,6 +423,32 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
         if (_serviceStatus.value != Status.Started && RemoteControlManager.remoteServer.value == null) return
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { CommandTarget.standaloneClient().setGroupExpand(groupTag, newExpanded) }
+        }
+    }
+
+    /**
+     * Starts a full subscription latency pass once when its card is first opened.
+     * Groups are tested sequentially because stopped-state Mihomo probes own an
+     * exclusive core session.
+     */
+    fun onSubscriptionOpened(profileId: Long) {
+        if (!autoTestRequestedProfiles.add(profileId)) return
+        viewModelScope.launch {
+            val readyState = withTimeoutOrNull(15_000L) {
+                uiState.first { state ->
+                    Settings.selectedProfile == profileId &&
+                        state.profileId == profileId &&
+                        !state.isLoading &&
+                        state.groups.isNotEmpty()
+                }
+            }
+            if (readyState == null) {
+                autoTestRequestedProfiles.remove(profileId)
+                return@launch
+            }
+            readyState.groups
+                .filter { it.selectable && it.items.isNotEmpty() }
+                .forEach { group -> startUrlTest(group.tag)?.join() }
         }
     }
 
@@ -525,33 +558,37 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
     }
 
     fun urlTest(groupTag: String) {
+        startUrlTest(groupTag)
+    }
+
+    private fun startUrlTest(groupTag: String): Job? {
         val running = latencyJobs[groupTag]
         if (running != null) {
             running.cancel()
-            return
+            return null
         }
 
         val profileId = Settings.selectedProfile
-        if (profileId == -1L) return
-        val group = uiState.value.groups.firstOrNull { it.tag == groupTag } ?: return
+        if (profileId == -1L) return null
+        val group = uiState.value.groups.firstOrNull { it.tag == groupTag } ?: return null
         val source = when {
             RemoteControlManager.remoteServer.value != null || _serviceStatus.value == Status.Started -> LatencyResultSource.LIVE_CORE
             _serviceStatus.value == Status.Stopped -> LatencyResultSource.OFFLINE_PROBE
             else -> {
                 sendErrorMessage("请等待 Mihomo VPN 完成状态切换")
-                return
+                return null
             }
         }
         if (source == LatencyResultSource.OFFLINE_PROBE && latencyJobs.isNotEmpty()) {
             sendErrorMessage("请等待当前节点测速完成")
-            return
+            return null
         }
         val networkKey = currentNetworkKey()
         LatencyRepository.markNetworkChanged(networkKey)
         val targets = group.items.map { item ->
             LatencyTarget(profileId, group.tag, item.tag, networkKey, source)
         }
-        if (targets.isEmpty()) return
+        if (targets.isEmpty()) return null
         val runToken = latencyRunSequence.incrementAndGet()
         latencyRunTokens[groupTag] = runToken
 
@@ -616,6 +653,7 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
                 }
             }
         }
+        return job
     }
 
     private fun cancelLatencyTests() {
@@ -741,5 +779,15 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
                 }
             }
         }
+    }
+}
+
+internal fun List<Group>.visibleForMode(mode: String): List<Group> {
+    if (mode.equals("global", ignoreCase = true)) return this
+    val hasUserSelectableGroup = any { it.selectable && !it.tag.equals("GLOBAL", ignoreCase = true) }
+    return if (hasUserSelectableGroup) {
+        filterNot { it.tag.equals("GLOBAL", ignoreCase = true) }
+    } else {
+        this
     }
 }
