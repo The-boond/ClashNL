@@ -5,7 +5,6 @@ on:
     paths:
       - "Android/Core/**"
       - "Android/Examples/**"
-      - "Android/scripts/verify-core.sh"
       - "iOS/Core/**"
       - "iOS/Examples/**"
       - "iOS/scripts/verify-core.sh"
@@ -14,7 +13,6 @@ on:
     paths:
       - "Android/Core/**"
       - "Android/Examples/**"
-      - "Android/scripts/verify-core.sh"
       - "iOS/Core/**"
       - "iOS/Examples/**"
       - "iOS/scripts/verify-core.sh"
@@ -25,20 +23,28 @@ permissions:
   contents: read
 
 jobs:
-  converter:
+  android-mihomo-bridge:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    strategy:
-      matrix:
-        project:
-          - Android
-          - iOS
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.12'
+          cache-dependency-path: Android/Core/mihomo-bridge/native/go.sum
+      - name: Verify Android Mihomo bridge
+        working-directory: Android/Core/mihomo-bridge/native
+        run: go test ./...
+
+  ios-converter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           # Match the Go toolchain used by the pinned sing-box core ref.
           go-version: '1.25.12'
-          cache-dependency-path: ${{ matrix.project }}/Core/clashconv/go.sum
-      - name: Verify ${{ matrix.project }} converter and pinned core
-        run: bash "${{ matrix.project }}/scripts/verify-core.sh"
+          cache-dependency-path: iOS/Core/clashconv/go.sum
+      - name: Verify iOS converter and pinned core
+        run: bash "iOS/scripts/verify-core.sh"
