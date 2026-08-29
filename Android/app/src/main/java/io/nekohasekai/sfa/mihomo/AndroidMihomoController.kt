@@ -103,10 +103,10 @@ class AndroidMihomoController private constructor(context: Context) : MihomoCont
                 val httpProxyPort = request.httpProxyPort ?: 0
                 val generation = loadApiGeneration(request.config, httpProxyPort)
                 val tunDevice = request.tunFactory?.invoke() ?: request.tun
-                tunDevice?.let { tun ->
-                    // From this point Android's VPN is established, so install socket
-                    // protection immediately before attaching the native TUN listener.
-                    MihomoNativeBridge.prepareTun(tun.callback.asNativeCallback())
+                (tunDevice?.callback ?: request.socketCallback)?.let { callback ->
+                    // Install outbound socket routing before a native TUN listener or
+                    // Android system proxy can accept traffic.
+                    MihomoNativeBridge.prepareTun(callback.asNativeCallback())
                 }
                 tunDevice?.let { tun ->
                     // Native/sing-tun exclusively owns this duplicated descriptor. The
