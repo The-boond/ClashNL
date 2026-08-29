@@ -74,6 +74,10 @@ import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.latency.LatencyResultStatus
 import io.nekohasekai.sfa.latency.NodeLatencyResult
+import io.nekohasekai.sfa.compose.theme.ErrorRed
+import io.nekohasekai.sfa.compose.theme.InfoBlue
+import io.nekohasekai.sfa.compose.theme.SuccessGreen
+import io.nekohasekai.sfa.compose.theme.WarningOrange
 import io.nekohasekai.sfa.utils.CommandClient
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -167,11 +171,8 @@ fun GroupsCard(
 }
 
 /**
- * Compact node chooser embedded in the selected subscription card.
- *
- * It intentionally exposes only the primary selectable group so the everyday
- * flow stays profile -> node, while the legacy full groups route remains
- * available for diagnostics and deep links.
+ * Three-level chooser embedded in the selected subscription card:
+ * subscription -> proxy group -> node.
  */
 @Composable
 fun SubscriptionNodesPanel(
@@ -194,12 +195,13 @@ fun SubscriptionNodesPanel(
 
     LaunchedEffect(serviceStatus, profile?.id) {
         actualViewModel.updateServiceStatus(serviceStatus)
-        profile?.id?.let(actualViewModel::refreshSelectedProfile)
+        profile?.id?.let { profileId ->
+            actualViewModel.refreshSelectedProfile(profileId)
+            actualViewModel.onSubscriptionOpened(profileId)
+        }
     }
 
     val availableGroups = uiState.groups
-    val primaryGroup = availableGroups.firstOrNull { it.selectable } ?: availableGroups.firstOrNull()
-    val isTesting = primaryGroup?.let { uiState.testingGroups.contains(it.tag) } == true
     val isLoading = uiState.isLoading
 
     Column(
@@ -217,17 +219,12 @@ fun SubscriptionNodesPanel(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.title_groups),
+                    text = stringResource(R.string.subscription_proxy_groups),
                     style = MaterialTheme.typography.titleSmall,
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text(
-                    text =
-                    stringResource(
-                        R.string.current_node,
-                        primaryGroup?.selected?.takeIf { it.isNotBlank() }
-                            ?: stringResource(R.string.auto),
-                    ),
+                    text = stringResource(R.string.subscription_choose_group_hint),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.primary,
                     maxLines = 1,
@@ -235,28 +232,6 @@ fun SubscriptionNodesPanel(
                 )
             }
 
-            if (primaryGroup?.selectable == true) {
-                TextButton(
-                    onClick = { actualViewModel.urlTest(primaryGroup.tag) },
-                ) {
-                    if (isTesting) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(16.dp),
-                            strokeWidth = 2.dp,
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                    }
-                    Text(
-                        stringResource(
-                            if (isTesting) {
-                                R.string.latency_test_cancel
-                            } else {
-                                R.string.latency_test_all
-                            },
-                        ),
-                    )
-                }
-            }
         }
 
         when {
@@ -275,7 +250,7 @@ fun SubscriptionNodesPanel(
                 }
             }
 
-            primaryGroup == null -> {
+            availableGroups.isEmpty() -> {
                 Text(
                     text = stringResource(R.string.no_nodes_available),
                     style = MaterialTheme.typography.bodyMedium,
@@ -285,12 +260,16 @@ fun SubscriptionNodesPanel(
             }
 
             else -> {
-                ProxyItemsList(
-                    items = primaryGroup.items,
-                    selectedTag = primaryGroup.selected,
-                    isSelectable = primaryGroup.selectable,
-                    onItemSelected = { itemTag -> actualViewModel.selectGroupItem(primaryGroup.tag, itemTag) },
-                )
+                availableGroups.forEach { group ->
+                    ProxyGroupItem(
+                        group = group,
+                        isExpanded = uiState.expandedGroups.contains(group.tag),
+                        isTesting = uiState.testingGroups.contains(group.tag),
+                        onToggleExpanded = { actualViewModel.toggleGroupExpand(group.tag) },
+                        onItemSelected = { itemTag -> actualViewModel.selectGroupItem(group.tag, itemTag) },
+                        onUrlTest = { actualViewModel.urlTest(group.tag) },
+                    )
+                }
             }
         }
     }
@@ -674,47 +653,16 @@ private fun ProxyLatencyBadge(
     modifier: Modifier = Modifier,
 ) {
     // Direct color calculation without animation for better performance
-    val colorScheme = MaterialTheme.colorScheme
     val delay = latency?.medianMs?.coerceIn(0, Int.MAX_VALUE.toLong())?.toInt() ?: Int.MAX_VALUE
     val latencyColor =
         remember(delay, isSelected) {
-            when {
-                delay < 100 -> {
-                    // Excellent - green/tertiary
-                    if (isSelected) {
-                        colorScheme.tertiary
-                    } else {
-                        colorScheme.tertiary.copy(alpha = 0.9f)
-                    }
-                }
-
-                delay < 300 -> {
-                    // Good - primary
-                    if (isSelected) {
-                        colorScheme.primary
-                    } else {
-                        colorScheme.primary.copy(alpha = 0.9f)
-                    }
-                }
-
-                delay < 500 -> {
-                    // Fair - secondary/warning
-                    if (isSelected) {
-                        colorScheme.secondary
-                    } else {
-                        colorScheme.secondary.copy(alpha = 0.9f)
-                    }
-                }
-
-                else -> {
-                    // Poor - error
-                    if (isSelected) {
-                        colorScheme.error
-                    } else {
-                        colorScheme.error.copy(alpha = 0.9f)
-                    }
-                }
+            val bandColor = when (latencyColorBand(delay)) {
+                LatencyColorBand.GREEN -> SuccessGreen
+                LatencyColorBand.BLUE -> InfoBlue
+                LatencyColorBand.ORANGE -> WarningOrange
+                LatencyColorBand.RED -> ErrorRed
             }
+            if (isSelected) bandColor else bandColor.copy(alpha = 0.9f)
         }
 
     val label = when (latency?.status) {
@@ -738,6 +686,15 @@ private fun ProxyLatencyBadge(
         color = latencyColor,
         modifier = modifier,
     )
+}
+
+internal enum class LatencyColorBand { GREEN, BLUE, ORANGE, RED }
+
+internal fun latencyColorBand(delayMs: Int): LatencyColorBand = when {
+    delayMs <= 250 -> LatencyColorBand.GREEN
+    delayMs <= 350 -> LatencyColorBand.BLUE
+    delayMs <= 600 -> LatencyColorBand.ORANGE
+    else -> LatencyColorBand.RED
 }
 
 @Composable
