@@ -8,6 +8,8 @@ data class MihomoStartRequest(
     val config: MihomoConfig,
     /** App-owned loopback HTTP proxy port. Null preserves the live port on reload. */
     val httpProxyPort: Int? = null,
+    /** Protects core outbound sockets even when no TUN listener is requested. */
+    val socketCallback: MihomoTunCallback? = null,
     val tun: MihomoTunDevice? = null,
     val tunFactory: (suspend () -> MihomoTunDevice)? = null,
 )

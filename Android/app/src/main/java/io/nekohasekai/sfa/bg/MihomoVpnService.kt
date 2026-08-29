@@ -6,6 +6,8 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager.NameNotFoundException
 import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
@@ -70,6 +72,10 @@ class MihomoVpnService :
         private const val NOTIFICATION_ID = 10_321
         private val SUPPORTED_CLASH_MODES = setOf("rule", "global", "direct")
 
+        @Volatile
+        var activeHttpProxyPort: Int = 0
+            private set
+
         fun start(context: Context) {
             ContextCompat.startForegroundService(
                 context,
@@ -98,6 +104,9 @@ class MihomoVpnService :
 
     @Volatile
     private var activeRun: ActiveRun? = null
+
+    @Volatile
+    private var activeUnderlyingNetwork: Network? = null
     private var tun: ParcelFileDescriptor? = null
 
     private data class ActiveRun(val generation: Long, val startId: Int)
@@ -231,7 +240,21 @@ class MihomoVpnService :
 
     override fun onBind(intent: Intent): IBinder? = if (intent.action == Action.SERVICE) binder else super.onBind(intent)
 
-    override fun protectSocket(fd: Int): Boolean = protect(fd)
+    override fun protectSocket(fd: Int): Boolean {
+        if (!protect(fd)) return false
+        val network = activeUnderlyingNetwork ?: findUnderlyingNetwork() ?: return true
+        return runCatching {
+            // Network.bindSocket works on the socket itself; binding a dup keeps
+            // ownership of Mihomo's original descriptor in the native layer.
+            ParcelFileDescriptor.fromFd(fd).use { duplicate ->
+                network.bindSocket(duplicate.fileDescriptor)
+            }
+            true
+        }.getOrElse {
+            Log.w(TAG, "Unable to bind protected socket to the physical network", it)
+            false
+        }
+    }
 
     override fun querySocketUid(protocol: Int, source: String, target: String): Int {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return Process.INVALID_UID
@@ -256,14 +279,22 @@ class MihomoVpnService :
             "Selected profile is not a Mihomo profile"
         }
         val content = File(profile.typed.path).readText()
+        activeUnderlyingNetwork = findUnderlyingNetwork()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            !connectivityManager().bindProcessToNetwork(activeUnderlyingNetwork)
+        ) {
+            Log.w(TAG, "Android did not bind Mihomo to the physical network")
+        }
         var establishedDevice: ParcelFileDescriptor? = null
         try {
             when (MihomoNetworkMode.fromStorage(Settings.mihomoNetworkMode)) {
                 MihomoNetworkMode.VirtualNic -> {
+                    val proxyPort = findAvailableLoopbackPort()
+                    activeHttpProxyPort = proxyPort
                     controller.start(
                         MihomoStartRequest(
                             config = MihomoConfig(content),
-                            httpProxyPort = 0,
+                            httpProxyPort = proxyPort,
                             // The controller invokes this only after it owns the exclusive
                             // runtime lease and has loaded the profile. This prevents both a
                             // stopped-state probe race and routing startup downloads into an
@@ -271,15 +302,21 @@ class MihomoVpnService :
                             tunFactory = {
                                 val device = establishTun()
                                 establishedDevice = device
-                                // Let Android keep tracking the current physical network.
+                                // Pin the VPN to the validated physical network. Some OEM
+                                // builds accept protect(fd) but still leave native sockets
+                                // routed into the VPN unless the underlying network is set.
                                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                                    if (!setUnderlyingNetworks(null)) {
-                                        Log.w(TAG, "Android did not accept automatic underlying-network selection")
+                                    val networks = activeUnderlyingNetwork?.let { arrayOf(it) }
+                                    if (!setUnderlyingNetworks(networks)) {
+                                        Log.w(TAG, "Android did not accept the underlying network")
                                     }
                                 }
                                 MihomoTunDevice(
                                     fileDescriptor = device.fd,
-                                    stack = "system",
+                                    // The system stack depends on Android kernel/netlink
+                                    // behavior that is blocked on some HyperOS builds. The
+                                    // bundled gVisor stack handles TCP and UDP in userspace.
+                                    stack = "gvisor",
                                     gateway = "172.19.0.1/30,fdfe:dcba:9876::1/126",
                                     dns = "0.0.0.0,::",
                                     callback = this,
@@ -294,10 +331,12 @@ class MihomoVpnService :
                         error("System proxy mode requires Android 10 or newer")
                     }
                     val proxyPort = findAvailableLoopbackPort()
+                    activeHttpProxyPort = proxyPort
                     controller.start(
                         MihomoStartRequest(
                             config = MihomoConfig(content),
                             httpProxyPort = proxyPort,
+                            socketCallback = this,
                         ),
                     )
                     establishedDevice = establishSystemProxy(proxyPort)
@@ -351,12 +390,30 @@ class MihomoVpnService :
 
     private fun findAvailableLoopbackPort(): Int = ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { it.localPort }
 
+    private fun findUnderlyingNetwork(): Network? {
+        val connectivity = connectivityManager()
+        val activeNetwork = connectivity.activeNetwork
+        return connectivity.allNetworks
+            .asSequence()
+            .mapNotNull { network ->
+                val capabilities = connectivity.getNetworkCapabilities(network) ?: return@mapNotNull null
+                if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return@mapNotNull null
+                if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) return@mapNotNull null
+                if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@mapNotNull null
+                network to capabilities
+            }.maxByOrNull { (network, capabilities) ->
+                (if (network == activeNetwork) 2 else 0) +
+                    (if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) 1 else 0)
+            }?.first
+    }
+
     private fun applyPerAppRules(builder: Builder) {
         if (!Settings.perAppProxyEnabled) return
         val packages = Settings.getEffectivePerAppProxyList()
+        val mode = Settings.getEffectivePerAppProxyMode()
         for (packageName in packages) {
             try {
-                when (Settings.getEffectivePerAppProxyMode()) {
+                when (mode) {
                     Settings.PER_APP_PROXY_INCLUDE -> builder.addAllowedApplication(packageName)
                     Settings.PER_APP_PROXY_EXCLUDE -> builder.addDisallowedApplication(packageName)
                 }
@@ -370,6 +427,11 @@ class MihomoVpnService :
         runCatching { controller.stop() }
         tun?.close()
         tun = null
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            connectivityManager().bindProcessToNetwork(null)
+        }
+        activeUnderlyingNetwork = null
+        activeHttpProxyPort = 0
     }
 
     private suspend fun finishStop(startId: Int? = null) {

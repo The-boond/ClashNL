@@ -45,6 +45,7 @@ class HTTPClient : Closeable {
         url: String,
         requestUserAgent: String = userAgent,
         networkRoute: AppHttpTransport.NetworkRoute = AppHttpTransport.NetworkRoute.Underlying,
+        localHttpProxyPort: Int? = null,
     ): Response {
         val validatedUrl = RemoteProfileUrlPolicy.validate(url)
         val request = Request.Builder()
@@ -57,6 +58,7 @@ class HTTPClient : Closeable {
                 request,
                 preferLocalSocks = true,
                 networkRoute = networkRoute,
+                localHttpProxyPort = localHttpProxyPort,
             ).use { response ->
                 if (!response.isSuccessful) {
                     throw IllegalStateException("订阅请求失败（HTTP ${response.code}）")
@@ -90,6 +92,13 @@ class HTTPClient : Closeable {
 
     /** Queries through Android's active route so VPN diagnostics observe the real tunnel exit. */
     fun getStringViaActiveNetwork(url: String): String = get(url, networkRoute = AppHttpTransport.NetworkRoute.Active).content
+
+    /** Queries through Mihomo's app-owned loopback proxy and observes its selected exit. */
+    fun getStringViaLocalHttpProxy(url: String, port: Int): String = get(
+        url,
+        networkRoute = AppHttpTransport.NetworkRoute.Active,
+        localHttpProxyPort = port,
+    ).content
 
     fun getSubscription(url: String): Response = get(url, subscriptionUserAgent)
 

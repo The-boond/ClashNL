@@ -68,16 +68,16 @@ import io.nekohasekai.sfa.compat.rememberOverscrollEffectCompat
 import io.nekohasekai.sfa.compose.model.Group
 import io.nekohasekai.sfa.compose.model.GroupItem
 import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsViewModel
+import io.nekohasekai.sfa.compose.theme.ErrorRed
+import io.nekohasekai.sfa.compose.theme.InfoBlue
+import io.nekohasekai.sfa.compose.theme.SuccessGreen
+import io.nekohasekai.sfa.compose.theme.WarningOrange
 import io.nekohasekai.sfa.compose.topbar.OverrideTopBar
 import io.nekohasekai.sfa.compose.util.rememberSheetDismissFromContentOnlyIfGestureStartedAtTopModifier
 import io.nekohasekai.sfa.constant.Status
 import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.latency.LatencyResultStatus
 import io.nekohasekai.sfa.latency.NodeLatencyResult
-import io.nekohasekai.sfa.compose.theme.ErrorRed
-import io.nekohasekai.sfa.compose.theme.InfoBlue
-import io.nekohasekai.sfa.compose.theme.SuccessGreen
-import io.nekohasekai.sfa.compose.theme.WarningOrange
 import io.nekohasekai.sfa.utils.CommandClient
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -231,7 +231,6 @@ fun SubscriptionNodesPanel(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-
         }
 
         when {

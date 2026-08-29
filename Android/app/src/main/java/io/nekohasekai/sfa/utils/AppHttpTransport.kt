@@ -11,6 +11,8 @@ import okhttp3.Request
 import okhttp3.Response
 import java.net.Inet4Address
 import java.net.InetAddress
+import java.net.InetSocketAddress
+import java.net.Proxy
 import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
@@ -19,9 +21,9 @@ import java.util.concurrent.TimeUnit
  *
  * Subscription requests prefer IPv4, but retain the platform's
  * IPv6/NAT64 result when the physical network has no usable IPv4 result.
- * Requests bind directly to Android's underlying non-VPN network. Mihomo
- * intentionally exposes no local HTTP/SOCKS inbound, so probing the old
- * sing-box port would only add a failed connection before every request.
+ * Subscription requests bind directly to Android's underlying non-VPN network.
+ * Runtime diagnostics may instead opt into Mihomo's app-owned IPv4 loopback
+ * HTTP proxy so they observe the selected proxy exit.
  */
 object AppHttpTransport {
     enum class NetworkRoute {
@@ -41,8 +43,10 @@ object AppHttpTransport {
         preferLocalSocks: Boolean = false,
         callTimeoutSeconds: Long = DEFAULT_CALL_TIMEOUT_SECONDS,
         networkRoute: NetworkRoute = NetworkRoute.Underlying,
+        localHttpProxyPort: Int? = null,
     ): Response {
         require(callTimeoutSeconds >= 0) { "callTimeoutSeconds must not be negative" }
+        require(localHttpProxyPort == null || localHttpProxyPort in 1..65_535) { "Invalid local HTTP proxy port" }
         val network = underlyingNetwork().takeIf { networkRoute == NetworkRoute.Underlying }
         val dns = object : Dns {
             override fun lookup(hostname: String): List<InetAddress> {
@@ -55,6 +59,10 @@ object AppHttpTransport {
         }
         val builder = baseBuilder(callTimeoutSeconds).dns(dns)
         network?.socketFactory?.let(builder::socketFactory)
+        localHttpProxyPort?.let { port ->
+            // Mihomo deliberately binds its app-owned inbound to IPv4 loopback.
+            builder.proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", port)))
+        }
         return builder.build().newCall(request).execute()
     }
 

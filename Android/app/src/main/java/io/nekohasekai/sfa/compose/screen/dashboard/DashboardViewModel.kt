@@ -6,6 +6,7 @@ import io.nekohasekai.libbox.OutboundGroup
 import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.R
+import io.nekohasekai.sfa.bg.MihomoVpnService
 import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.compose.base.BaseViewModel
 import io.nekohasekai.sfa.compose.base.UiEvent
@@ -951,7 +952,15 @@ class DashboardViewModel :
         viewModelScope.launch(Dispatchers.IO) {
             updateState { copy(publicIpLoading = true, publicIpError = null) }
             try {
-                val trace = HTTPClient().use { it.getStringViaActiveNetwork(IP_TRACE_URL) }
+                val proxyPort = MihomoVpnService.activeHttpProxyPort
+                val trace =
+                    HTTPClient().use { client ->
+                        if (proxyPort > 0) {
+                            client.getStringViaLocalHttpProxy(IP_TRACE_URL, proxyPort)
+                        } else {
+                            client.getStringViaActiveNetwork(IP_TRACE_URL)
+                        }
+                    }
                 val values =
                     trace.lineSequence()
                         .mapNotNull { line ->
