@@ -33,6 +33,7 @@ import io.nekohasekai.sfa.mihomo.MihomoNativeBridge
 import io.nekohasekai.sfa.mihomo.MihomoOfflineSelectionStore
 import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
 import io.nekohasekai.sfa.mihomo.MihomoRuntimeState
+import io.nekohasekai.sfa.mihomo.MihomoSelectionRevision
 import io.nekohasekai.sfa.repository.MihomoProxyGroupRepository
 import io.nekohasekai.sfa.utils.AppLifecycleObserver
 import io.nekohasekai.sfa.utils.CommandClient
@@ -508,6 +509,7 @@ class GroupsViewModel(private val sharedCommandClient: CommandClient? = null) :
                         controller.selectProxy(groupTag, itemTag)
                         runCatching { controller.closeAllConnections() }
                         if (selectionTokens[groupTag] != token || Settings.selectedProfile != profileId) return@launch
+                        MihomoSelectionRevision.publish(profileId, groupTag, itemTag)
                         refreshMihomoGroups()
                     }
                 } else if (!localStopped) {

@@ -1,9 +1,7 @@
 package io.nekohasekai.sfa.utils
 
 import android.net.Network
-import android.net.NetworkCapabilities
-import io.nekohasekai.sfa.Application
-import io.nekohasekai.sfa.bg.DefaultNetworkMonitor
+import io.nekohasekai.sfa.bg.UnderlyingNetworkTracker
 import io.nekohasekai.sfa.repository.RemoteProfileUrlPolicy
 import okhttp3.Dns
 import okhttp3.OkHttpClient
@@ -30,8 +28,8 @@ object AppHttpTransport {
         /** Bypass an active VPN. Used for subscription and update bootstrap traffic. */
         Underlying,
 
-        /** Follow Android's current default route, including this app's VPN. */
-        Active,
+        /** Only used to reach Mihomo's explicit loopback HTTP proxy. */
+        LocalProxy,
     }
 
     private const val DEFAULT_CALL_TIMEOUT_SECONDS = 35L
@@ -44,21 +42,40 @@ object AppHttpTransport {
         callTimeoutSeconds: Long = DEFAULT_CALL_TIMEOUT_SECONDS,
         networkRoute: NetworkRoute = NetworkRoute.Underlying,
         localHttpProxyPort: Int? = null,
+        explicitNetwork: Network? = null,
     ): Response {
         require(callTimeoutSeconds >= 0) { "callTimeoutSeconds must not be negative" }
         require(localHttpProxyPort == null || localHttpProxyPort in 1..65_535) { "Invalid local HTTP proxy port" }
-        val network = underlyingNetwork().takeIf { networkRoute == NetworkRoute.Underlying }
-        val dns = object : Dns {
-            override fun lookup(hostname: String): List<InetAddress> {
-                val addresses =
-                    network?.let { selected ->
-                        runCatching { selected.getAllByName(hostname).toList() }.getOrNull()
-                    } ?: Dns.SYSTEM.lookup(hostname)
-                return preferIPv4(hostname, addresses)
-            }
+        require(networkRoute != NetworkRoute.LocalProxy || localHttpProxyPort != null) {
+            "The process-default route is not a reliable VPN diagnostic; use the local Mihomo proxy"
         }
+        require(networkRoute == NetworkRoute.LocalProxy || localHttpProxyPort == null) {
+            "A local Mihomo proxy cannot be combined with an underlying-network request"
+        }
+        require(explicitNetwork == null || networkRoute == NetworkRoute.Underlying) {
+            "An explicit network is only valid for underlying-network requests"
+        }
+        val network = when (networkRoute) {
+            NetworkRoute.Underlying ->
+                explicitNetwork
+                    ?: UnderlyingNetworkTracker.current()?.network
+                    ?: error("No physical network is available")
+
+            NetworkRoute.LocalProxy -> null
+        }
+        val dns =
+            network?.let { selected ->
+                object : Dns {
+                    override fun lookup(hostname: String): List<InetAddress> = preferIPv4(hostname, selected.getAllByName(hostname).toList())
+                }
+            } ?: Dns.SYSTEM
         val builder = baseBuilder(callTimeoutSeconds).dns(dns)
-        network?.socketFactory?.let(builder::socketFactory)
+        network?.let { selected ->
+            // Ignore Android's system ProxySelector: a physical-network
+            // diagnostic must not be redirected into this app's VPN proxy.
+            builder.proxy(Proxy.NO_PROXY)
+            builder.socketFactory(selected.socketFactory)
+        }
         localHttpProxyPort?.let { port ->
             // Mihomo deliberately binds its app-owned inbound to IPv4 loopback.
             builder.proxy(Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", port)))
@@ -72,28 +89,6 @@ object AppHttpTransport {
         }
         val ipv4 = addresses.filterIsInstance<Inet4Address>()
         return if (ipv4.isEmpty()) addresses else ipv4 + addresses.filterNot { it is Inet4Address }
-    }
-
-    private fun underlyingNetwork(): Network? {
-        val connectivity = Application.connectivity
-        val candidates = buildList {
-            DefaultNetworkMonitor.defaultNetwork?.let(::add)
-            connectivity.activeNetwork?.let(::add)
-            connectivity.allNetworks.forEach(::add)
-        }.distinct()
-        return candidates
-            .mapNotNull { network ->
-                val capabilities = connectivity.getNetworkCapabilities(network) ?: return@mapNotNull null
-                if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return@mapNotNull null
-                if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) return@mapNotNull null
-                if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@mapNotNull null
-                network to capabilities
-            }
-            .sortedByDescending { (_, capabilities) ->
-                capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
-            }
-            .firstOrNull()
-            ?.first
     }
 
     private fun baseBuilder(callTimeoutSeconds: Long) = OkHttpClient.Builder()

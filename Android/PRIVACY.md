@@ -1,11 +1,10 @@
 # ClashNl Android Privacy Policy / Android 隐私政策
 
-Last updated / 最后更新：2026-07-28
+Last updated / 最后更新：2026-09-04
 
-> Release owner: replace `PRIVACY_CONTACT_EMAIL` with the public support
-> address before publishing this policy.
+> Public support address: `privacy-contact-removed@example.invalid`.
 >
-> 发布负责人：公开此政策前，将 `PRIVACY_CONTACT_EMAIL` 替换为公开支持邮箱。
+> 公开支持邮箱：`privacy-contact-removed@example.invalid`。
 
 ## 中文
 
@@ -34,13 +33,16 @@ Google Play、GitHub 或 F-Droid 的更新服务。VPN 开启后，流量会
 依据用户选择的配置发送到配置中指定的 DNS 和代理服务器。上述服务器由用户或
 其服务提供方控制，并受相应服务提供方的隐私政策约束。
 
-仪表盘的公网 IP 卡片仅在用户点击刷新时请求 Cloudflare 的
-`/cdn-cgi/trace` 服务，并在本机显示返回的公网 IP、地区和接入点。ClashNl
-开发者不接收或保存该结果；Cloudflare 会按其隐私政策处理该网络请求。
+VPN 服务进入运行状态、用户改变代理模式或节点、或点击仪表盘刷新按钮时，应用会
+请求 Cloudflare 的 `/cdn-cgi/trace` 服务：一次请求显式绑定到 Android 选中的
+非 VPN 物理网络，用于显示物理直连出口；VPN 正在运行时，另一次请求仅通过 Mihomo 的本机 HTTP
+代理，用于显示当前模式与规则对该检测地址产生的实际出口。网络切换只会清除旧
+结果，不会自动发起请求。结果仅在本机显示，ClashNl 开发者不接收或保存；
+Cloudflare 会按其隐私政策处理这些网络请求。
 
 ### 联系
 
-隐私问题请联系：`PRIVACY_CONTACT_EMAIL`
+隐私问题请联系：`privacy-contact-removed@example.invalid`
 
 ## English
 
@@ -76,11 +78,16 @@ the selected profile to DNS and proxy servers specified in that profile. Those
 servers are controlled by the user or the user's service provider and are
 governed by that provider's privacy policy.
 
-The dashboard public-IP card contacts Cloudflare's `/cdn-cgi/trace` service
-only after the user taps refresh, then displays the returned public IP, region,
-and point of presence on device. The ClashNl developer does not receive or
-store that result; Cloudflare processes the request under its privacy policy.
+When the VPN service enters the running state, the user changes the proxy mode
+or node, or the user taps the dashboard refresh button, the app contacts
+Cloudflare's `/cdn-cgi/trace` service. One request is explicitly bound to
+Android's selected non-VPN physical network to show the direct exit. While the VPN is running, a second request is sent only
+through Mihomo's local HTTP proxy to show the actual exit selected for that
+test address by the current mode and rules. A network change clears stale
+results but does not automatically make a request. Results are displayed only
+on device and are not received or stored by the ClashNl developer; Cloudflare
+processes these requests under its privacy policy.
 
 ### Contact
 
-For privacy questions, contact: `PRIVACY_CONTACT_EMAIL`
+For privacy questions, contact: `privacy-contact-removed@example.invalid`

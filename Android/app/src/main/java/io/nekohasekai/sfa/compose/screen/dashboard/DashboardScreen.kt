@@ -158,6 +158,15 @@ fun DashboardScreen(
                         publicIpColo = uiState.publicIpColo,
                         publicIpLoading = uiState.publicIpLoading,
                         publicIpError = uiState.publicIpError,
+                        proxyPublicIpAvailable = uiState.proxyPublicIpAvailable,
+                        directPublicIp = uiState.directPublicIp,
+                        directPublicIpCountryCode = uiState.directPublicIpLocation,
+                        directPublicIpColo = uiState.directPublicIpColo,
+                        directPublicIpError = uiState.directPublicIpError,
+                        underlyingTransport = uiState.underlyingTransport,
+                        underlyingInterfaceName = uiState.underlyingInterfaceName,
+                        underlyingInterfaceAddresses = uiState.underlyingInterfaceAddresses,
+                        underlyingValidated = uiState.underlyingValidated,
                         serviceMode = stringResource(
                             when (uiState.networkMode) {
                                 MihomoNetworkMode.SystemProxy -> R.string.network_mode_system_proxy
