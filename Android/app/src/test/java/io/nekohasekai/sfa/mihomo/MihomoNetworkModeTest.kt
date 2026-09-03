@@ -1,6 +1,8 @@
 package io.nekohasekai.sfa.mihomo
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MihomoNetworkModeTest {
@@ -16,5 +18,11 @@ class MihomoNetworkModeTest {
         MihomoNetworkMode.entries.forEach { mode ->
             assertEquals(mode, MihomoNetworkMode.fromStorage(mode.storageValue))
         }
+    }
+
+    @Test
+    fun onlyVirtualNicPinsUnderlyingAfterTunEstablishes() {
+        assertTrue(MihomoNetworkMode.VirtualNic.pinsUnderlyingAfterEstablish())
+        assertFalse(MihomoNetworkMode.SystemProxy.pinsUnderlyingAfterEstablish())
     }
 }

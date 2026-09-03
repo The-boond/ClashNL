@@ -1,5 +1,6 @@
 package io.nekohasekai.sfa.utils
 
+import okhttp3.Request
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
 import org.junit.Test
@@ -26,6 +27,40 @@ class AppHttpTransportTest {
     fun `rejects an empty DNS result`() {
         assertThrows(UnknownHostException::class.java) {
             AppHttpTransport.preferIPv4("missing.example", emptyList())
+        }
+    }
+
+    @Test
+    fun `local proxy route requires an explicit loopback proxy port`() {
+        val request = Request.Builder().url("https://example.com").build()
+
+        assertThrows(IllegalArgumentException::class.java) {
+            AppHttpTransport.execute(
+                request = request,
+                networkRoute = AppHttpTransport.NetworkRoute.LocalProxy,
+            )
+        }
+    }
+
+    @Test
+    fun `underlying route rejects a local proxy port`() {
+        val request = Request.Builder().url("https://example.com").build()
+
+        assertThrows(IllegalArgumentException::class.java) {
+            AppHttpTransport.execute(
+                request = request,
+                networkRoute = AppHttpTransport.NetworkRoute.Underlying,
+                localHttpProxyPort = 7890,
+            )
+        }
+    }
+
+    @Test
+    fun `underlying route fails closed without a selected physical network`() {
+        val request = Request.Builder().url("https://example.com").build()
+
+        assertThrows(IllegalStateException::class.java) {
+            AppHttpTransport.execute(request)
         }
     }
 }

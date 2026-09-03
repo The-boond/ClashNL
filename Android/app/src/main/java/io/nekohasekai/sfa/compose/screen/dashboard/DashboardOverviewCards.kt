@@ -1,7 +1,5 @@
 package io.nekohasekai.sfa.compose.screen.dashboard
 
-import android.content.Context
-import android.net.ConnectivityManager
 import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -59,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import io.nekohasekai.sfa.BuildConfig
 import io.nekohasekai.sfa.R
+import io.nekohasekai.sfa.bg.UnderlyingTransport
 import io.nekohasekai.sfa.compose.LineChart
 import io.nekohasekai.sfa.compose.util.RelativeTimeFormatter
 import io.nekohasekai.sfa.constant.Status
@@ -67,7 +66,6 @@ import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.mihomo.MihomoNetworkMode
 import io.nekohasekai.sfa.utils.CoreVersion
 import io.nekohasekai.sfa.utils.formatBytes
-import java.net.Inet4Address
 
 @Composable
 fun DashboardServiceCard(
@@ -80,6 +78,15 @@ fun DashboardServiceCard(
     publicIpColo: String?,
     publicIpLoading: Boolean,
     publicIpError: String?,
+    proxyPublicIpAvailable: Boolean,
+    directPublicIp: String?,
+    directPublicIpCountryCode: String?,
+    directPublicIpColo: String?,
+    directPublicIpError: String?,
+    underlyingTransport: UnderlyingTransport?,
+    underlyingInterfaceName: String?,
+    underlyingInterfaceAddresses: List<String>,
+    underlyingValidated: Boolean,
     onToggleService: () -> Unit,
     onOpenSubscriptions: () -> Unit,
     onOpenNodePicker: () -> Unit,
@@ -185,68 +192,23 @@ fun DashboardServiceCard(
             }
 
             if (isStarted) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceContainer,
-                ) {
-                    Row(
-                        modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 11.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            text = countryCodeToFlagEmoji(publicIpCountryCode),
-                            style = MaterialTheme.typography.headlineSmall,
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = stringResource(R.string.dashboard_public_ip),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Text(
-                                text =
-                                when {
-                                    publicIpLoading -> stringResource(R.string.dashboard_ip_pending)
-                                    publicIp != null -> publicIp
-                                    publicIpError != null -> stringResource(R.string.dashboard_ip_query_failed)
-                                    else -> stringResource(R.string.dashboard_ip_pending)
-                                },
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.SemiBold,
-                            )
-                            val location =
-                                listOfNotNull(
-                                    publicIpCountryCode?.takeIf { it.isNotBlank() },
-                                    publicIpColo?.takeIf { it.isNotBlank() },
-                                ).joinToString(" · ")
-                            if (location.isNotBlank()) {
-                                Text(
-                                    text = location,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
-                            }
-                        }
-                        if (publicIpLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(20.dp),
-                                strokeWidth = 2.dp,
-                            )
-                        } else {
-                            IconButton(onClick = onRefreshIp) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Refresh,
-                                    contentDescription = stringResource(R.string.dashboard_refresh_ip),
-                                )
-                            }
-                        }
-                    }
-                }
+                NetworkDiagnosticsPanel(
+                    underlyingTransport = underlyingTransport,
+                    underlyingInterfaceName = underlyingInterfaceName,
+                    underlyingInterfaceAddresses = underlyingInterfaceAddresses,
+                    underlyingValidated = underlyingValidated,
+                    directPublicIp = directPublicIp,
+                    directPublicIpCountryCode = directPublicIpCountryCode,
+                    directPublicIpColo = directPublicIpColo,
+                    directPublicIpError = directPublicIpError,
+                    proxyPublicIp = publicIp,
+                    proxyPublicIpCountryCode = publicIpCountryCode,
+                    proxyPublicIpColo = publicIpColo,
+                    proxyPublicIpError = publicIpError,
+                    proxyPublicIpAvailable = proxyPublicIpAvailable,
+                    loading = publicIpLoading,
+                    onRefresh = onRefreshIp,
+                )
             }
 
             Button(
@@ -308,6 +270,168 @@ fun DashboardServiceCard(
         }
     }
 }
+
+@Composable
+private fun NetworkDiagnosticsPanel(
+    underlyingTransport: UnderlyingTransport?,
+    underlyingInterfaceName: String?,
+    underlyingInterfaceAddresses: List<String>,
+    underlyingValidated: Boolean,
+    directPublicIp: String?,
+    directPublicIpCountryCode: String?,
+    directPublicIpColo: String?,
+    directPublicIpError: String?,
+    proxyPublicIp: String?,
+    proxyPublicIpCountryCode: String?,
+    proxyPublicIpColo: String?,
+    proxyPublicIpError: String?,
+    proxyPublicIpAvailable: Boolean,
+    loading: Boolean,
+    onRefresh: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 11.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.dashboard_underlying_network),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    val typeAndInterface =
+                        listOfNotNull(
+                            underlyingTransport?.let { underlyingTransportLabel(it) },
+                            underlyingInterfaceName?.takeIf(String::isNotBlank),
+                        ).joinToString(" · ")
+                    Text(
+                        text = typeAndInterface.ifBlank { stringResource(R.string.dashboard_not_available) },
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        text =
+                        if (underlyingInterfaceAddresses.isEmpty()) {
+                            stringResource(R.string.dashboard_interface_addresses_unavailable)
+                        } else {
+                            underlyingInterfaceAddresses.joinToString(" · ")
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    if (underlyingTransport != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+                        Text(
+                            text = stringResource(R.string.dashboard_network_validation_unavailable),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    } else if (underlyingTransport != null && !underlyingValidated) {
+                        Text(
+                            text = stringResource(R.string.dashboard_network_not_validated),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+                if (loading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                } else {
+                    IconButton(onClick = onRefresh) {
+                        Icon(
+                            imageVector = Icons.Outlined.Refresh,
+                            contentDescription = stringResource(R.string.dashboard_refresh_ip),
+                        )
+                    }
+                }
+            }
+            ExitIpRow(
+                label = stringResource(R.string.dashboard_direct_public_ip),
+                ip = directPublicIp,
+                countryCode = directPublicIpCountryCode,
+                colo = directPublicIpColo,
+                loading = loading,
+                available = underlyingTransport != null,
+                error = directPublicIpError,
+            )
+            ExitIpRow(
+                label = stringResource(R.string.dashboard_proxy_public_ip),
+                ip = proxyPublicIp,
+                countryCode = proxyPublicIpCountryCode,
+                colo = proxyPublicIpColo,
+                loading = loading,
+                available = proxyPublicIpAvailable,
+                error = proxyPublicIpError,
+            )
+        }
+    }
+}
+
+@Composable
+private fun ExitIpRow(
+    label: String,
+    ip: String?,
+    countryCode: String?,
+    colo: String?,
+    loading: Boolean,
+    available: Boolean,
+    error: String?,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            text = countryCodeToFlagEmoji(countryCode),
+            style = MaterialTheme.typography.titleLarge,
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                text =
+                when {
+                    !available -> stringResource(R.string.dashboard_ip_unavailable)
+                    loading -> stringResource(R.string.dashboard_ip_pending)
+                    ip != null -> ip
+                    error != null -> stringResource(R.string.dashboard_ip_query_failed)
+                    else -> stringResource(R.string.dashboard_ip_not_checked)
+                },
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.SemiBold,
+            )
+            val location = listOfNotNull(countryCode, colo).joinToString(" · ")
+            if (location.isNotBlank()) {
+                Text(
+                    text = location,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun underlyingTransportLabel(transport: UnderlyingTransport): String = stringResource(
+    when (transport) {
+        UnderlyingTransport.WiFi -> R.string.dashboard_transport_wifi
+        UnderlyingTransport.Cellular -> R.string.dashboard_transport_cellular
+        UnderlyingTransport.Ethernet -> R.string.dashboard_transport_ethernet
+        UnderlyingTransport.Usb -> R.string.dashboard_transport_usb
+        UnderlyingTransport.Bluetooth -> R.string.dashboard_transport_bluetooth
+        UnderlyingTransport.Satellite -> R.string.dashboard_transport_satellite
+        UnderlyingTransport.Other -> R.string.dashboard_transport_other
+    },
+)
 
 internal fun countryCodeToFlagEmoji(countryCode: String?): String {
     val normalized = countryCode?.trim()?.uppercase().orEmpty()
@@ -631,16 +755,23 @@ fun WebsiteTestCard(
 
 @Composable
 fun IPInfoCard(
-    publicIp: String?,
-    location: String?,
-    colo: String?,
+    proxyPublicIp: String?,
+    proxyLocation: String?,
+    proxyColo: String?,
+    proxyAvailable: Boolean,
+    directPublicIp: String?,
+    directLocation: String?,
+    directColo: String?,
+    directError: String?,
+    underlyingTransport: UnderlyingTransport?,
+    underlyingInterfaceName: String?,
+    underlyingInterfaceAddresses: List<String>,
+    underlyingValidated: Boolean,
     loading: Boolean,
-    error: String?,
+    proxyError: String?,
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val context = LocalContext.current
-    val localIp = remember { findLocalIp(context) }
     DashboardModuleCard(
         title = stringResource(R.string.dashboard_ip_info),
         icon = Icons.Outlined.Public,
@@ -660,22 +791,48 @@ fun IPInfoCard(
         },
     ) {
         DashboardMetric(
-            label = stringResource(R.string.dashboard_public_ip),
+            label = stringResource(R.string.dashboard_underlying_network),
             value =
-            when {
-                publicIp != null -> publicIp
-                error != null -> stringResource(R.string.dashboard_ip_query_failed)
-                else -> stringResource(R.string.dashboard_ip_pending)
-            },
+            listOfNotNull(
+                underlyingTransport?.let { underlyingTransportLabel(it) },
+                underlyingInterfaceName,
+            ).joinToString(" · ").ifBlank { stringResource(R.string.dashboard_not_available) },
         )
         DashboardMetric(
-            label = stringResource(R.string.dashboard_local_ip),
-            value = localIp ?: stringResource(R.string.dashboard_not_available),
+            label = stringResource(R.string.dashboard_interface_addresses),
+            value = underlyingInterfaceAddresses.joinToString(" · ").ifBlank {
+                stringResource(R.string.dashboard_not_available)
+            },
         )
-        if (location != null || colo != null) {
-            DashboardMetric(
-                label = stringResource(R.string.dashboard_location),
-                value = listOfNotNull(location, colo).joinToString(" · "),
+        ExitIpRow(
+            label = stringResource(R.string.dashboard_direct_public_ip),
+            ip = directPublicIp,
+            countryCode = directLocation,
+            colo = directColo,
+            loading = loading,
+            available = underlyingTransport != null,
+            error = directError,
+        )
+        ExitIpRow(
+            label = stringResource(R.string.dashboard_proxy_public_ip),
+            ip = proxyPublicIp,
+            countryCode = proxyLocation,
+            colo = proxyColo,
+            loading = loading,
+            available = proxyAvailable,
+            error = proxyError,
+        )
+        if (underlyingTransport != null && Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
+            Text(
+                text = stringResource(R.string.dashboard_network_validation_unavailable),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (underlyingTransport != null && !underlyingValidated) {
+            Text(
+                text = stringResource(R.string.dashboard_network_not_validated),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
             )
         }
         Text(
@@ -957,21 +1114,4 @@ private fun serviceStatusLabel(status: Status): String = when (status) {
     Status.Starting -> stringResource(R.string.status_starting)
     Status.Stopping -> stringResource(R.string.status_stopping)
     else -> stringResource(R.string.status_default)
-}
-
-private fun findLocalIp(context: Context): String? {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return null
-
-    val connectivityManager = context.getSystemService(ConnectivityManager::class.java)
-    val network = connectivityManager.activeNetwork ?: return null
-    val addresses =
-        connectivityManager.getLinkProperties(network)
-            ?.linkAddresses
-            ?.map { it.address }
-            ?.filterNot { it.isLoopbackAddress || it.isLinkLocalAddress }
-            .orEmpty()
-    return (
-        addresses.firstOrNull { it is Inet4Address }
-            ?: addresses.firstOrNull()
-        )?.hostAddress
 }
