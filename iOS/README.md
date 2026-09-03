@@ -109,8 +109,8 @@ xcodebuild \
 - App Store Connect 中选择免费或最低可用价格档（例如 US$0.99）。
 - 在购买/使用前展示 VPN 数据实践；App Privacy 与
   `PrivacyInfo.xcprivacy` 保持一致。
-- 将 [PRIVACY.md](PRIVACY.md) 中的 `PRIVACY_CONTACT_EMAIL` 替换为公开
-  支持邮箱，发布为可访问的隐私政策 URL，并填写到 App Store Connect。
+- 确认 [PRIVACY.md](PRIVACY.md) 中的公开支持邮箱有效，将其发布为可访问的
+  隐私政策 URL，并填写到 App Store Connect。
 - Review Notes 说明隧道仅由用户主动开启、配置从哪里来，并提供专用、可用且
   可轮换的审核测试订阅或二维码（凭据不要提交到仓库）。
 - 提供可复现的完整对应源代码、构建脚本、GPL 许可证与修改说明。

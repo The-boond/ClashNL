@@ -160,4 +160,5 @@ public enum SharedPreferences {
 
     public static let enabledDashboardCards = Preference<[String]>("enabled_dashboard_cards", defaultValue: [])
     public static let dashboardCardOrder = Preference<[String]>("dashboard_card_order", defaultValue: [])
+    public static let dashboardNetworkPathsMigrationCompleted = Preference<Bool>("dashboard_network_paths_migration_completed", defaultValue: false)
 }

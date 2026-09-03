@@ -114,7 +114,7 @@ public struct OverviewView: View {
             return Variant.screenshotMode || profile.status.isConnected
         case .httpProxy:
             return (Variant.screenshotMode || profile.status.isConnectedStrict) && systemProxyAvailable
-        case .profile:
+        case .profile, .networkPaths:
             return true
         }
     }
@@ -155,6 +155,12 @@ public struct OverviewView: View {
                         }
                     }
                 )
+            )
+        case .networkPaths:
+            NetworkDiagnosticsCard(
+                commandClient: environments.commandClient,
+                isRemote: false,
+                serviceAvailable: profile.status.isConnectedStrict
             )
         }
     }

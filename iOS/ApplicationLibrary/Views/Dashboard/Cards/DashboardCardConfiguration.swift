@@ -60,13 +60,36 @@ public final class DashboardCardConfiguration: ObservableObject {
     private func loadEnabledCards() async -> [DashboardCard] {
         let saved = await SharedPreferences.enabledDashboardCards.get()
         #if os(iOS)
+            let needsNetworkPathsMigration = !(await SharedPreferences.dashboardNetworkPathsMigrationCompleted.get())
             if saved == [Self.noEnabledCardsMarker] {
+                // Respect an explicit "no cards" choice while completing the
+                // one-time migration so it is not reconsidered next launch.
+                if needsNetworkPathsMigration {
+                    await SharedPreferences.dashboardNetworkPathsMigrationCompleted.set(true)
+                }
                 return []
             }
         #endif
-        guard !saved.isEmpty else { return DashboardCard.defaultCards }
+        guard !saved.isEmpty else {
+            #if os(iOS)
+                if needsNetworkPathsMigration {
+                    await SharedPreferences.dashboardNetworkPathsMigrationCompleted.set(true)
+                }
+            #endif
+            return DashboardCard.defaultCards
+        }
 
         var cards = saved.compactMap { migrateCardName($0) }.compactMap { DashboardCard(rawValue: $0) }
+        #if os(iOS)
+            // The card did not exist when older custom lists were saved. Add it
+            // once; after this marker is set, a user disabling it is preserved.
+            if needsNetworkPathsMigration {
+                if !cards.contains(.networkPaths) {
+                    cards.append(.networkPaths)
+                }
+                await SharedPreferences.dashboardNetworkPathsMigrationCompleted.set(true)
+            }
+        #endif
         #if !os(iOS)
             if !cards.contains(.profile) {
                 cards.append(.profile)
@@ -82,7 +105,12 @@ public final class DashboardCardConfiguration: ObservableObject {
 
         var order = saved.compactMap { migrateCardName($0) }.compactMap { DashboardCard(rawValue: $0) }
         let existingSet = Set(order)
-        let newCards = DashboardCard.allCases.filter { !existingSet.contains($0) }
+        var newCards = DashboardCard.allCases.filter { !existingSet.contains($0) }
+        if let networkPathsIndex = newCards.firstIndex(of: .networkPaths) {
+            newCards.remove(at: networkPathsIndex)
+            let insertionIndex = order.firstIndex(of: .profile).map { $0 + 1 } ?? 0
+            order.insert(.networkPaths, at: insertionIndex)
+        }
         order.append(contentsOf: newCards)
         await SharedPreferences.dashboardCardOrder.set(order.map(\.rawValue))
         return order
