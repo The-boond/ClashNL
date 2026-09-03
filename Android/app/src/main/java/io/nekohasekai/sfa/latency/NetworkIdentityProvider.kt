@@ -1,13 +1,16 @@
 package io.nekohasekai.sfa.latency
 
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.os.Build
 import io.nekohasekai.sfa.Application
-import io.nekohasekai.sfa.bg.DefaultNetworkMonitor
+import io.nekohasekai.sfa.bg.UnderlyingNetworkSnapshot
+import io.nekohasekai.sfa.bg.UnderlyingNetworkTracker
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 data class NetworkIdentity(
@@ -16,70 +19,39 @@ data class NetworkIdentity(
 )
 
 object NetworkIdentityProvider {
-    private val registrations = ConcurrentHashMap<Any, ConnectivityManager.NetworkCallback>()
+    private val registrations = ConcurrentHashMap<Any, Unit>()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _changes = MutableStateFlow(NetworkIdentity("unknown", "unknown"))
     val changes = _changes.asStateFlow()
+    private var collectionJob: Job? = null
 
-    fun current(): NetworkIdentity {
-        val connectivity = Application.connectivity
-        val candidates = buildList {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                connectivity.activeNetwork?.let(::add)
-            }
-            DefaultNetworkMonitor.defaultNetwork?.let(::add)
-            connectivity.allNetworks.forEach(::add)
-        }.distinct()
+    fun current(): NetworkIdentity = UnderlyingNetworkTracker.current()?.toIdentity() ?: UNKNOWN
 
-        val selected = candidates.firstNotNullOfOrNull { network ->
-            val capabilities = connectivity.getNetworkCapabilities(network) ?: return@firstNotNullOfOrNull null
-            if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@firstNotNullOfOrNull null
-            if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) {
-                return@firstNotNullOfOrNull null
-            }
-            network to capabilities
-        }
-
-        if (selected == null) return NetworkIdentity("unknown", "unknown")
-        val (network, capabilities) = selected
-        val transport = when {
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "cellular"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> "ethernet"
-            capabilities.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH) -> "bluetooth"
-            else -> "other"
-        }
-        val networkId = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            network.networkHandle.toString()
-        } else {
-            connectivity.getLinkProperties(network)?.interfaceName ?: "unknown"
-        }
-        return NetworkIdentity("$transport:$networkId", transport)
-    }
-
+    @Synchronized
     fun start(owner: Any) {
-        if (registrations.containsKey(owner)) return
-        val connectivity = Application.connectivity
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            val callback = object : ConnectivityManager.NetworkCallback() {
-                override fun onAvailable(network: Network) = publishCurrent()
-
-                override fun onLost(network: Network) = publishCurrent()
-
-                override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) = publishCurrent()
+        if (registrations.putIfAbsent(owner, Unit) != null) return
+        UnderlyingNetworkTracker.start(Application.application)
+        if (collectionJob == null) {
+            collectionJob = scope.launch {
+                UnderlyingNetworkTracker.snapshots.collect(::publish)
             }
-            runCatching { connectivity.registerDefaultNetworkCallback(callback) }
-                .onSuccess { registrations[owner] = callback }
         }
-        publishCurrent()
+        publish(UnderlyingNetworkTracker.current())
     }
 
+    @Synchronized
     fun stop(owner: Any) {
-        val callback = registrations.remove(owner) ?: return
-        runCatching { Application.connectivity.unregisterNetworkCallback(callback) }
+        if (registrations.remove(owner) == null || registrations.isNotEmpty()) return
+        collectionJob?.cancel()
+        collectionJob = null
     }
 
-    private fun publishCurrent() {
-        val identity = runCatching { current() }.getOrDefault(NetworkIdentity("unknown", "unknown"))
+    private fun publish(snapshot: UnderlyingNetworkSnapshot?) {
+        val identity = snapshot?.toIdentity() ?: UNKNOWN
         if (_changes.value != identity) _changes.value = identity
     }
+
+    private fun UnderlyingNetworkSnapshot.toIdentity(): NetworkIdentity = NetworkIdentity("${transport.key}:$networkHandle", transport.key)
+
+    private val UNKNOWN = NetworkIdentity("unknown", "unknown")
 }

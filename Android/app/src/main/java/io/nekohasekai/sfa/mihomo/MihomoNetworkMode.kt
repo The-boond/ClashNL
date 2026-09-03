@@ -9,3 +9,6 @@ enum class MihomoNetworkMode(val storageValue: String) {
         fun fromStorage(value: String): MihomoNetworkMode = entries.firstOrNull { it.storageValue == value } ?: VirtualNic
     }
 }
+
+/** Virtual NIC keeps the proven post-establish VpnService pinning sequence. */
+internal fun MihomoNetworkMode.pinsUnderlyingAfterEstablish(): Boolean = this == MihomoNetworkMode.VirtualNic

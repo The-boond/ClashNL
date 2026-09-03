@@ -1,5 +1,6 @@
 package io.nekohasekai.sfa.utils
 
+import android.net.Network
 import io.nekohasekai.sfa.BuildConfig
 import io.nekohasekai.sfa.config.MihomoProfileContent
 import io.nekohasekai.sfa.repository.RemoteProfileUrlPolicy
@@ -46,6 +47,7 @@ class HTTPClient : Closeable {
         requestUserAgent: String = userAgent,
         networkRoute: AppHttpTransport.NetworkRoute = AppHttpTransport.NetworkRoute.Underlying,
         localHttpProxyPort: Int? = null,
+        explicitNetwork: Network? = null,
     ): Response {
         val validatedUrl = RemoteProfileUrlPolicy.validate(url)
         val request = Request.Builder()
@@ -59,6 +61,7 @@ class HTTPClient : Closeable {
                 preferLocalSocks = true,
                 networkRoute = networkRoute,
                 localHttpProxyPort = localHttpProxyPort,
+                explicitNetwork = explicitNetwork,
             ).use { response ->
                 if (!response.isSuccessful) {
                     throw IllegalStateException("订阅请求失败（HTTP ${response.code}）")
@@ -90,13 +93,17 @@ class HTTPClient : Closeable {
 
     fun getString(url: String): String = get(url).content
 
-    /** Queries through Android's active route so VPN diagnostics observe the real tunnel exit. */
-    fun getStringViaActiveNetwork(url: String): String = get(url, networkRoute = AppHttpTransport.NetworkRoute.Active).content
+    /** Fails closed while resolving and connecting through one captured physical network. */
+    fun getStringViaUnderlyingNetwork(url: String, network: Network): String = get(
+        url,
+        networkRoute = AppHttpTransport.NetworkRoute.Underlying,
+        explicitNetwork = network,
+    ).content
 
     /** Queries through Mihomo's app-owned loopback proxy and observes its selected exit. */
     fun getStringViaLocalHttpProxy(url: String, port: Int): String = get(
         url,
-        networkRoute = AppHttpTransport.NetworkRoute.Active,
+        networkRoute = AppHttpTransport.NetworkRoute.LocalProxy,
         localHttpProxyPort = port,
     ).content
 

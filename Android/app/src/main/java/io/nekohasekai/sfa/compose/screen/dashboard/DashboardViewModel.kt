@@ -7,6 +7,9 @@ import io.nekohasekai.libbox.StatusMessage
 import io.nekohasekai.sfa.Application
 import io.nekohasekai.sfa.R
 import io.nekohasekai.sfa.bg.MihomoVpnService
+import io.nekohasekai.sfa.bg.UnderlyingNetworkSnapshot
+import io.nekohasekai.sfa.bg.UnderlyingNetworkTracker
+import io.nekohasekai.sfa.bg.UnderlyingTransport
 import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.compose.base.BaseViewModel
 import io.nekohasekai.sfa.compose.base.UiEvent
@@ -19,6 +22,7 @@ import io.nekohasekai.sfa.mihomo.MihomoNetworkMode
 import io.nekohasekai.sfa.mihomo.MihomoProxyGroup
 import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
 import io.nekohasekai.sfa.mihomo.MihomoRuntimeState
+import io.nekohasekai.sfa.mihomo.MihomoSelectionRevision
 import io.nekohasekai.sfa.mihomo.MihomoTraffic
 import io.nekohasekai.sfa.repository.ProfileRemoteRepository
 import io.nekohasekai.sfa.runtime.ProfileRuntime
@@ -31,6 +35,7 @@ import io.nekohasekai.sfa.utils.formatBytes
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +43,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -111,12 +117,22 @@ data class DashboardUiState(
     val systemProxyVisible: Boolean = false,
     val systemProxyEnabled: Boolean = false,
     val systemProxySwitching: Boolean = false,
-    // Public IP information (loaded only after the dashboard is opened)
+    // Physical upstream and exit information (loaded only after the dashboard is opened)
+    val underlyingTransport: UnderlyingTransport? = null,
+    val underlyingInterfaceName: String? = null,
+    val underlyingInterfaceAddresses: List<String> = emptyList(),
+    val underlyingValidated: Boolean = false,
+    val directPublicIp: String? = null,
+    val directPublicIpLocation: String? = null,
+    val directPublicIpColo: String? = null,
+    val directPublicIpError: String? = null,
+    // Mihomo exit for the trace URL. This is never populated from an unproxied fallback.
     val publicIp: String? = null,
     val publicIpLocation: String? = null,
     val publicIpColo: String? = null,
     val publicIpLoading: Boolean = false,
     val publicIpError: String? = null,
+    val proxyPublicIpAvailable: Boolean = false,
     // Card visibility settings
     val visibleCards: Set<CardGroup> =
         configurableDashboardCards.toSet(),
@@ -137,6 +153,52 @@ internal data class DashboardProxySelection(
     val group: String,
     val node: String,
 )
+
+internal data class DashboardIpTrace(
+    val ip: String,
+    val location: String?,
+    val colo: String?,
+)
+
+internal fun parseDashboardIpTrace(trace: String): DashboardIpTrace {
+    val values =
+        trace.lineSequence()
+            .mapNotNull { line ->
+                val separator = line.indexOf('=')
+                if (separator <= 0) null else line.substring(0, separator) to line.substring(separator + 1)
+            }.toMap()
+    val ip = values["ip"]?.takeIf(String::isNotBlank)
+        ?: error("Public IP response did not contain an address")
+    return DashboardIpTrace(
+        ip = ip,
+        location = values["loc"]?.takeIf(String::isNotBlank),
+        colo = values["colo"]?.takeIf(String::isNotBlank),
+    )
+}
+
+/** Validation is advisory; the request itself remains pinned to one non-VPN Network. */
+@Suppress("UNUSED_PARAMETER")
+internal fun shouldQueryDirectExit(
+    hasUnderlyingNetwork: Boolean,
+    validated: Boolean,
+): Boolean = hasUnderlyingNetwork
+
+internal enum class DashboardSelectionAction {
+    Ignore,
+    Invalidate,
+    Refresh,
+}
+
+internal fun dashboardSelectionAction(
+    localSession: Boolean,
+    selectedProfileId: Long,
+    changedProfileId: Long,
+    serviceStarted: Boolean,
+): DashboardSelectionAction = when {
+    selectedProfileId != changedProfileId -> DashboardSelectionAction.Ignore
+    localSession && serviceStarted -> DashboardSelectionAction.Refresh
+    else -> DashboardSelectionAction.Invalidate
+}
 
 internal fun dashboardProxySelection(
     mode: String,
@@ -195,6 +257,8 @@ class DashboardViewModel :
     private val localModeSelectionMutex = Mutex()
     private val localModeSelectionSequence = AtomicLong()
     private val ipRefreshSequence = AtomicLong()
+    private var lastUnderlyingSnapshot: UnderlyingNetworkSnapshot? = null
+    private var lastSelectionRevision = MihomoSelectionRevision.currentRevision
 
     override fun createInitialState(): DashboardUiState {
         val savedOrder = loadItemOrder()
@@ -217,6 +281,36 @@ class DashboardViewModel :
     init {
         loadProfiles()
         ProfileManager.registerCallback(::onProfilesChanged)
+        UnderlyingNetworkTracker.start(Application.application)
+
+        viewModelScope.launch {
+            UnderlyingNetworkTracker.snapshots.collect(::applyUnderlyingSnapshot)
+        }
+
+        viewModelScope.launch {
+            MihomoSelectionRevision.changes.collect { change ->
+                if (change == null || change.revision <= lastSelectionRevision) return@collect
+                lastSelectionRevision = change.revision
+                when (
+                    dashboardSelectionAction(
+                        localSession = RemoteControlManager.remoteServer.value == null,
+                        selectedProfileId = Settings.selectedProfile,
+                        changedProfileId = change.profileId,
+                        serviceStarted =
+                        _serviceStatus.value == Status.Started &&
+                            mihomoController.runtimeState.value == MihomoRuntimeState.Running,
+                    )
+                ) {
+                    DashboardSelectionAction.Ignore -> Unit
+                    DashboardSelectionAction.Invalidate -> invalidateProxyExit()
+                    DashboardSelectionAction.Refresh -> {
+                        invalidateProxyExit()
+                        refreshLocalGroups()
+                        refreshIpInfo(force = true)
+                    }
+                }
+            }
+        }
 
         viewModelScope.launch {
             combine(
@@ -613,10 +707,11 @@ class DashboardViewModel :
                         systemProxyVisible = false,
                         systemProxyEnabled = false,
                         systemProxySwitching = false,
+                        proxyPublicIpAvailable = MihomoVpnService.activeHttpProxyPort > 0,
                     )
                 }
-                refreshLocalGroups()
                 if (firstRunningUpdate) {
+                    refreshLocalGroups()
                     refreshIpInfo(force = true)
                 }
             }
@@ -663,6 +758,7 @@ class DashboardViewModel :
                         publicIpColo = null,
                         publicIpLoading = false,
                         publicIpError = null,
+                        proxyPublicIpAvailable = false,
                     )
                 }
             }
@@ -946,57 +1042,135 @@ class DashboardViewModel :
 
     fun refreshIpInfo(force: Boolean = false) {
         if (currentState.publicIpLoading && !force) return
-        if (!force && (currentState.publicIp != null || currentState.publicIpError != null)) return
+        if (
+            !force &&
+            currentState.directPublicIp != null &&
+            (!currentState.proxyPublicIpAvailable || currentState.publicIp != null)
+        ) {
+            return
+        }
 
+        val underlyingSnapshot = UnderlyingNetworkTracker.refresh()
+        applyUnderlyingSnapshot(underlyingSnapshot)
+        val proxyPort = MihomoVpnService.activeHttpProxyPort.takeIf { it > 0 }
         val refreshToken = ipRefreshSequence.incrementAndGet()
         viewModelScope.launch(Dispatchers.IO) {
-            updateState { copy(publicIpLoading = true, publicIpError = null) }
-            try {
-                val proxyPort = MihomoVpnService.activeHttpProxyPort
-                val trace =
-                    HTTPClient().use { client ->
-                        if (proxyPort > 0) {
-                            client.getStringViaLocalHttpProxy(IP_TRACE_URL, proxyPort)
-                        } else {
-                            client.getStringViaActiveNetwork(IP_TRACE_URL)
+            updateState {
+                copy(
+                    publicIpLoading = true,
+                    directPublicIpError = null,
+                    publicIpError = null,
+                    proxyPublicIpAvailable = proxyPort != null,
+                )
+            }
+            val (directResult, proxyResult) = supervisorScope {
+                val direct = async {
+                    if (
+                        !shouldQueryDirectExit(
+                            hasUnderlyingNetwork = underlyingSnapshot != null,
+                            validated = underlyingSnapshot?.validated == true,
+                        )
+                    ) {
+                        Result.failure(IllegalStateException("No physical network is available"))
+                    } else {
+                        queryIpTrace {
+                            HTTPClient().use { client ->
+                                client.getStringViaUnderlyingNetwork(IP_TRACE_URL, checkNotNull(underlyingSnapshot).network)
+                            }
                         }
                     }
-                val values =
-                    trace.lineSequence()
-                        .mapNotNull { line ->
-                            val separator = line.indexOf('=')
-                            if (separator <= 0) {
-                                null
-                            } else {
-                                line.substring(0, separator) to line.substring(separator + 1)
+                }
+                val proxy = proxyPort?.let { port ->
+                    async {
+                        queryIpTrace {
+                            HTTPClient().use { client ->
+                                client.getStringViaLocalHttpProxy(IP_TRACE_URL, port)
                             }
-                        }.toMap()
-                val ip = values["ip"]?.takeIf { it.isNotBlank() }
-                    ?: error("Public IP response did not contain an address")
-                withContext(Dispatchers.Main) {
-                    if (refreshToken != ipRefreshSequence.get()) return@withContext
-                    updateState {
-                        copy(
-                            publicIp = ip,
-                            publicIpLocation = values["loc"]?.takeIf { it.isNotBlank() },
-                            publicIpColo = values["colo"]?.takeIf { it.isNotBlank() },
-                            publicIpLoading = false,
-                            publicIpError = null,
-                        )
+                        }
                     }
                 }
-            } catch (exception: Exception) {
-                withContext(Dispatchers.Main) {
-                    if (refreshToken != ipRefreshSequence.get()) return@withContext
-                    updateState {
-                        copy(
-                            publicIpLoading = false,
-                            publicIpError = exception.message ?: "IP query failed",
+                direct.await() to proxy?.await()
+            }
+            withContext(Dispatchers.Main) {
+                if (refreshToken != ipRefreshSequence.get()) return@withContext
+                val latestUnderlying = UnderlyingNetworkTracker.current()
+                if (
+                    underlyingSnapshot != null &&
+                    (
+                        latestUnderlying == null ||
+                            latestUnderlying.networkHandle != underlyingSnapshot.networkHandle ||
+                            latestUnderlying.generation != underlyingSnapshot.generation
                         )
-                    }
+                ) {
+                    return@withContext
+                }
+                val directTrace = directResult.getOrNull()
+                val proxyStillAvailable = proxyPort != null && MihomoVpnService.activeHttpProxyPort == proxyPort
+                val proxyTrace = proxyResult?.takeIf { proxyStillAvailable }?.getOrNull()
+                updateState {
+                    copy(
+                        directPublicIp = directTrace?.ip,
+                        directPublicIpLocation = directTrace?.location,
+                        directPublicIpColo = directTrace?.colo,
+                        directPublicIpError = directResult.exceptionOrNull()?.message,
+                        publicIp = proxyTrace?.ip,
+                        publicIpLocation = proxyTrace?.location,
+                        publicIpColo = proxyTrace?.colo,
+                        publicIpLoading = false,
+                        publicIpError = proxyResult?.takeIf { proxyStillAvailable }?.exceptionOrNull()?.message,
+                        proxyPublicIpAvailable = proxyStillAvailable,
+                    )
                 }
             }
         }
+    }
+
+    private fun applyUnderlyingSnapshot(snapshot: UnderlyingNetworkSnapshot?) {
+        if (snapshot == lastUnderlyingSnapshot) return
+        lastUnderlyingSnapshot = snapshot
+        // A physical-network change invalidates both observations. Do not make
+        // a new external request until service start or an explicit refresh.
+        ipRefreshSequence.incrementAndGet()
+        updateState {
+            copy(
+                underlyingTransport = snapshot?.transport,
+                underlyingInterfaceName = snapshot?.interfaceName,
+                underlyingInterfaceAddresses = snapshot?.interfaceAddresses.orEmpty(),
+                underlyingValidated = snapshot?.validated == true,
+                directPublicIp = null,
+                directPublicIpLocation = null,
+                directPublicIpColo = null,
+                directPublicIpError = null,
+                publicIp = null,
+                publicIpLocation = null,
+                publicIpColo = null,
+                publicIpLoading = false,
+                publicIpError = null,
+                proxyPublicIpAvailable = MihomoVpnService.activeHttpProxyPort > 0,
+            )
+        }
+    }
+
+    private fun invalidateProxyExit() {
+        ipRefreshSequence.incrementAndGet()
+        updateState {
+            copy(
+                publicIp = null,
+                publicIpLocation = null,
+                publicIpColo = null,
+                publicIpLoading = false,
+                publicIpError = null,
+                proxyPublicIpAvailable = MihomoVpnService.activeHttpProxyPort > 0,
+            )
+        }
+    }
+
+    private fun queryIpTrace(request: () -> String): Result<DashboardIpTrace> = try {
+        Result.success(parseDashboardIpTrace(request()))
+    } catch (exception: CancellationException) {
+        throw exception
+    } catch (exception: Exception) {
+        Result.failure(exception)
     }
 
     fun toggleCardSettingsDialog() {
