@@ -94,7 +94,6 @@ import io.nekohasekai.sfa.compose.screen.connections.ConnectionsPage
 import io.nekohasekai.sfa.compose.screen.connections.ConnectionsViewModel
 import io.nekohasekai.sfa.compose.screen.dashboard.DashboardViewModel
 import io.nekohasekai.sfa.compose.screen.dashboard.GroupsCard
-import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsEvent
 import io.nekohasekai.sfa.compose.screen.dashboard.groups.GroupsViewModel
 import io.nekohasekai.sfa.compose.screen.log.LogViewModel
 import io.nekohasekai.sfa.compose.theme.SFATheme
@@ -858,15 +857,6 @@ class MainActivity :
                     }
                 },
             )
-
-        LaunchedEffect(groupsViewModel) {
-            groupsViewModel.events.collect { event ->
-                if (event is GroupsEvent.GroupSelected) {
-                    dashboardViewModel.refreshLocalGroups()
-                    dashboardViewModel.refreshIpInfo(force = true)
-                }
-            }
-        }
 
         val connectionsViewModel: ConnectionsViewModel? =
             if (isConnectionsRoute) {

@@ -69,11 +69,20 @@ fun DashboardCardRenderer(
 
         CardGroup.IPInfo ->
             IPInfoCard(
-                publicIp = uiState.publicIp,
-                location = uiState.publicIpLocation,
-                colo = uiState.publicIpColo,
+                proxyPublicIp = uiState.publicIp,
+                proxyLocation = uiState.publicIpLocation,
+                proxyColo = uiState.publicIpColo,
+                proxyAvailable = uiState.proxyPublicIpAvailable,
+                directPublicIp = uiState.directPublicIp,
+                directLocation = uiState.directPublicIpLocation,
+                directColo = uiState.directPublicIpColo,
+                directError = uiState.directPublicIpError,
+                underlyingTransport = uiState.underlyingTransport,
+                underlyingInterfaceName = uiState.underlyingInterfaceName,
+                underlyingInterfaceAddresses = uiState.underlyingInterfaceAddresses,
+                underlyingValidated = uiState.underlyingValidated,
                 loading = uiState.publicIpLoading,
-                error = uiState.publicIpError,
+                proxyError = uiState.publicIpError,
                 onRefresh = onRefreshIp,
                 modifier = modifier,
             )

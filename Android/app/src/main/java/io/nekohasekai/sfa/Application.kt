@@ -16,6 +16,7 @@ import androidx.core.content.getSystemService
 import io.nekohasekai.sfa.bg.AppChangeReceiver
 import io.nekohasekai.sfa.bg.CrashReportManager
 import io.nekohasekai.sfa.bg.OOMReportManager
+import io.nekohasekai.sfa.bg.UnderlyingNetworkTracker
 import io.nekohasekai.sfa.bg.UpdateProfileWork
 import io.nekohasekai.sfa.compose.theme.AppThemeMode
 import io.nekohasekai.sfa.database.LegacyProfileMigration
@@ -50,6 +51,7 @@ class Application : Application() {
         // persisted remote session load it into Mihomo's process on startup.
         Settings.activeRemoteServerId = 0L
         AppLifecycleObserver.register(this)
+        UnderlyingNetworkTracker.start(this)
 
         HookStatusClient.register(this)
         PrivilegeSettingsClient.register(this)

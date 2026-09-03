@@ -7,7 +7,6 @@ import android.content.Intent
 import android.content.pm.PackageManager.NameNotFoundException
 import android.net.ConnectivityManager
 import android.net.Network
-import android.net.NetworkCapabilities
 import android.net.ProxyInfo
 import android.net.VpnService
 import android.os.Build
@@ -35,6 +34,7 @@ import io.nekohasekai.sfa.mihomo.MihomoRuntimeState
 import io.nekohasekai.sfa.mihomo.MihomoStartRequest
 import io.nekohasekai.sfa.mihomo.MihomoTunCallback
 import io.nekohasekai.sfa.mihomo.MihomoTunDevice
+import io.nekohasekai.sfa.mihomo.pinsUnderlyingAfterEstablish
 import io.nekohasekai.sfa.runtime.ProfileRuntime
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -107,6 +107,9 @@ class MihomoVpnService :
 
     @Volatile
     private var activeUnderlyingNetwork: Network? = null
+
+    @Volatile
+    private var activeNetworkMode: MihomoNetworkMode? = null
     private var tun: ParcelFileDescriptor? = null
 
     private data class ActiveRun(val generation: Long, val startId: Int)
@@ -118,10 +121,13 @@ class MihomoVpnService :
             val startId: Int?,
             val failedGeneration: Long? = null,
         ) : ServiceCommand
+
+        data class UnderlyingChanged(val network: Network?) : ServiceCommand
     }
 
     override fun onCreate() {
         super.onCreate()
+        UnderlyingNetworkTracker.start(this)
         scope.launch {
             for (command in commands) {
                 lifecycleMutex.withLock {
@@ -132,6 +138,8 @@ class MihomoVpnService :
                                 finishStop(command.startId)
                             }
                         }
+
+                        is ServiceCommand.UnderlyingChanged -> handleUnderlyingNetworkChanged(command.network)
                     }
                 }
             }
@@ -149,6 +157,11 @@ class MihomoVpnService :
                         )
                     }
                 }
+            }
+        }
+        scope.launch {
+            UnderlyingNetworkTracker.snapshots.collect { snapshot ->
+                commands.trySend(ServiceCommand.UnderlyingChanged(snapshot?.network))
             }
         }
     }
@@ -198,6 +211,7 @@ class MihomoVpnService :
         if (controller.runtimeState.value != MihomoRuntimeState.Stopped || tun != null) {
             runBlocking { lifecycleMutex.withLock { stopCoreAndTun() } }
         }
+        UnderlyingNetworkTracker.endVpnSession()
         activeRun = null
         Settings.startedByUser = false
         ProfileRuntime.markStopped(ProfileCore.Mihomo)
@@ -242,7 +256,10 @@ class MihomoVpnService :
 
     override fun protectSocket(fd: Int): Boolean {
         if (!protect(fd)) return false
-        val network = activeUnderlyingNetwork ?: findUnderlyingNetwork() ?: return true
+        // File-descriptor binding was added in API 23. On Android 5.x,
+        // VpnService.protect(fd) is the strongest available loop safeguard.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        val network = activeUnderlyingNetwork ?: UnderlyingNetworkTracker.current(refresh = true)?.network ?: return true
         return runCatching {
             // Network.bindSocket works on the socket itself; binding a dup keeps
             // ownership of Mihomo's original descriptor in the native layer.
@@ -279,15 +296,14 @@ class MihomoVpnService :
             "Selected profile is not a Mihomo profile"
         }
         val content = File(profile.typed.path).readText()
-        activeUnderlyingNetwork = findUnderlyingNetwork()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            !connectivityManager().bindProcessToNetwork(activeUnderlyingNetwork)
-        ) {
-            Log.w(TAG, "Android did not bind Mihomo to the physical network")
-        }
+        UnderlyingNetworkTracker.beginVpnSession(this)
+        activeUnderlyingNetwork = UnderlyingNetworkTracker.current(refresh = true)?.network
+        bindProcessToUnderlyingNetwork(activeUnderlyingNetwork)
         var establishedDevice: ParcelFileDescriptor? = null
         try {
-            when (MihomoNetworkMode.fromStorage(Settings.mihomoNetworkMode)) {
+            val networkMode = MihomoNetworkMode.fromStorage(Settings.mihomoNetworkMode)
+            activeNetworkMode = networkMode
+            when (networkMode) {
                 MihomoNetworkMode.VirtualNic -> {
                     val proxyPort = findAvailableLoopbackPort()
                     activeHttpProxyPort = proxyPort
@@ -302,14 +318,14 @@ class MihomoVpnService :
                             tunFactory = {
                                 val device = establishTun()
                                 establishedDevice = device
-                                // Pin the VPN to the validated physical network. Some OEM
-                                // builds accept protect(fd) but still leave native sockets
-                                // routed into the VPN unless the underlying network is set.
-                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
-                                    val networks = activeUnderlyingNetwork?.let { arrayOf(it) }
-                                    if (!setUnderlyingNetworks(networks)) {
-                                        Log.w(TAG, "Android did not accept the underlying network")
-                                    }
+                                // Keep the known-good tethering sequence: establish first,
+                                // then update the VpnService. Builder-time pinning caused
+                                // hotspot clients to lose connectivity on a real device.
+                                if (
+                                    networkMode.pinsUnderlyingAfterEstablish() &&
+                                    !updateUnderlyingNetworks(activeUnderlyingNetwork)
+                                ) {
+                                    Log.w(TAG, "Android did not accept the initial underlying network")
                                 }
                                 MihomoTunDevice(
                                     fileDescriptor = device.fd,
@@ -362,6 +378,8 @@ class MihomoVpnService :
             .addRoute("0.0.0.0", 0)
             .addRoute("::", 0)
             .addDnsServer("172.19.0.2")
+        // Do not use Builder.setUnderlyingNetworks here. Applying it only
+        // after establish preserves Android tethering's downstream route.
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) builder.setMetered(false)
         if (Settings.allowBypass) builder.allowBypass()
@@ -383,6 +401,8 @@ class MihomoVpnService :
             .allowFamily(OsConstants.AF_INET6)
             .setHttpProxy(ProxyInfo.buildDirectProxy("127.0.0.1", proxyPort))
             .setMetered(false)
+        // This split VPN has no routes and deliberately retains the original
+        // SystemProxy builder behavior without an underlying-network pin.
         if (Settings.allowBypass) builder.allowBypass()
         applyPerAppRules(builder)
         return builder.establish() ?: error("android: system proxy VPN was not prepared or was revoked")
@@ -390,21 +410,35 @@ class MihomoVpnService :
 
     private fun findAvailableLoopbackPort(): Int = ServerSocket(0, 1, InetAddress.getLoopbackAddress()).use { it.localPort }
 
-    private fun findUnderlyingNetwork(): Network? {
-        val connectivity = connectivityManager()
-        val activeNetwork = connectivity.activeNetwork
-        return connectivity.allNetworks
-            .asSequence()
-            .mapNotNull { network ->
-                val capabilities = connectivity.getNetworkCapabilities(network) ?: return@mapNotNull null
-                if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)) return@mapNotNull null
-                if (!capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)) return@mapNotNull null
-                if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) return@mapNotNull null
-                network to capabilities
-            }.maxByOrNull { (network, capabilities) ->
-                (if (network == activeNetwork) 2 else 0) +
-                    (if (capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) 1 else 0)
-            }?.first
+    private suspend fun handleUnderlyingNetworkChanged(network: Network?) {
+        if (runtimeStatus != Status.Started || network == activeUnderlyingNetwork) return
+        val previous = activeUnderlyingNetwork
+        activeUnderlyingNetwork = network
+        bindProcessToUnderlyingNetwork(network)
+        if (tun != null && activeNetworkMode?.pinsUnderlyingAfterEstablish() == true) {
+            val accepted = updateUnderlyingNetworks(network)
+            if (!accepted) Log.w(TAG, "Android did not update the VPN underlying network")
+        }
+        if (controller.runtimeState.value == MihomoRuntimeState.Running) {
+            runCatching { controller.closeAllConnections() }
+                .onFailure { Log.w(TAG, "Unable to close connections after physical network change", it) }
+        }
+        Log.i(TAG, "Physical network changed from $previous to $network")
+    }
+
+    private fun bindProcessToUnderlyingNetwork(network: Network?): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) return true
+        return connectivityManager().bindProcessToNetwork(network).also { accepted ->
+            if (!accepted) Log.w(TAG, "Android did not bind Mihomo to the physical network $network")
+        }
+    }
+
+    private fun updateUnderlyingNetworks(network: Network?): Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP_MR1) {
+        // null restores Android's platform-selected default, matching the
+        // established behavior when no physical candidate is momentarily known.
+        setUnderlyingNetworks(network?.let { arrayOf(it) })
+    } else {
+        true
     }
 
     private fun applyPerAppRules(builder: Builder) {
@@ -430,7 +464,9 @@ class MihomoVpnService :
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
             connectivityManager().bindProcessToNetwork(null)
         }
+        UnderlyingNetworkTracker.endVpnSession()
         activeUnderlyingNetwork = null
+        activeNetworkMode = null
         activeHttpProxyPort = 0
     }
 
