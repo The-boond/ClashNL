@@ -1,11 +1,10 @@
 # ClashNl Apple Privacy Policy / Apple 隐私政策
 
-Last updated / 最后更新：2026-07-27
+Last updated / 最后更新：2026-09-04
 
-> Release owner: replace `PRIVACY_CONTACT_EMAIL` with the public support
-> address before publishing this policy.
+> Public support address: `deng2504607315@gmail.com`.
 >
-> 发布负责人：公开此政策前，将 `PRIVACY_CONTACT_EMAIL` 替换为公开支持邮箱。
+> 公开支持邮箱：`deng2504607315@gmail.com`。
 
 ## 中文
 
@@ -32,9 +31,18 @@ App Store 或 GitHub 的更新服务。VPN 开启后，流量会
 依据用户选择的配置发送到配置中指定的 DNS 和代理服务器。上述服务器由用户或
 其服务提供方控制，并受相应服务提供方的隐私政策约束。
 
+用户在“网络路径”或 STUN 工具中主动刷新时，应用会向用户配置的 STUN 服务器
+（未自定义时使用应用内置的默认服务器）发送 UDP 探测。STUN 服务器会看到该次
+探测的来源公网 IP，并向应用返回经 NAT 映射后的公网 IP 和端口。该结果仅在设备
+上展示；ClashNl 开发者不会接收或保存结果。STUN 只反映 UDP/NAT 路径，不代表
+HTTP、TCP 或所有分流规则的出口；UDP 不可用导致探测失败也不表示 VPN 已损坏。
+
+在远程控制模式下，UDP 探测由所连接的远程服务发出，结果通过远程控制通道返回
+本设备展示；因此结果反映远程服务的出口，而不是本设备的出口。
+
 ### 联系
 
-隐私问题请联系：`PRIVACY_CONTACT_EMAIL`
+隐私问题请联系：`deng2504607315@gmail.com`
 
 ## English
 
@@ -67,6 +75,20 @@ the selected profile to DNS and proxy servers specified in that profile. Those
 servers are controlled by the user or the user's service provider and are
 governed by that provider's privacy policy.
 
+When the user manually refreshes Network Paths or runs the STUN tool, the app
+sends UDP probes to the user-configured STUN server (or the app's built-in
+default when none is configured). That server observes the probe's source
+public IP address and returns the NAT-mapped public IP address and port. The
+result is displayed only on the device; the ClashNl developer does not receive
+or retain it. STUN describes only a UDP/NAT path, not the HTTP, TCP, or every
+routing-rule egress. A failed probe may mean UDP is unavailable and does not by
+itself mean that the VPN is broken.
+
+In remote-control mode, the connected remote service sends the UDP probes and
+returns the result through the remote-control channel for display on this
+device. The result therefore describes the remote service's egress, not this
+device's egress.
+
 ### Contact
 
-For privacy questions, contact: `PRIVACY_CONTACT_EMAIL`
+For privacy questions, contact: `deng2504607315@gmail.com`

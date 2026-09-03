@@ -74,6 +74,21 @@ rules:
 	if len(outbounds) != 7 {
 		t.Fatalf("expected 7 outbounds, got %d", len(outbounds))
 	}
+	hasDirect := false
+	for _, rawOutbound := range outbounds {
+		outbound, ok := rawOutbound.(map[string]any)
+		if ok && outbound["tag"] == "direct" && outbound["type"] == "direct" {
+			hasDirect = true
+			break
+		}
+	}
+	if !hasDirect {
+		t.Fatal("diagnostic direct outbound missing")
+	}
+	route, ok := document["route"].(map[string]any)
+	if !ok || route["auto_detect_interface"] != true {
+		t.Fatal("route must auto-detect the physical interface for direct diagnostics")
+	}
 	if !strings.Contains(output, `"type": "hysteria2"`) {
 		t.Fatal("Hysteria2 outbound missing")
 	}

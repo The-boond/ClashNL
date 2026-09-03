@@ -283,11 +283,16 @@ public class ExtensionPlatformInterface: NSObject, LibboxPlatformInterfaceProtoc
     }
 
     private var nwMonitor: NWPathMonitor?
+    private var underlyingNetworkSnapshotTimer: DispatchSourceTimer?
+    private let underlyingNetworkSnapshotQueue = DispatchQueue(label: "com.clashnl.underlying-network-snapshot")
 
     public func startDefaultInterfaceMonitor(_ listener: LibboxInterfaceUpdateListenerProtocol?) throws {
         guard let listener else {
             return
         }
+        // Do not let a snapshot left by an abnormal previous provider process
+        // look like the current tunnel's underlying path.
+        UnderlyingNetworkStatusStore.clear()
         let monitor = NWPathMonitor()
         nwMonitor = monitor
         let semaphore = DispatchSemaphore(value: 0)
@@ -298,7 +303,17 @@ public class ExtensionPlatformInterface: NSObject, LibboxPlatformInterfaceProtoc
                 self.onUpdateDefaultInterface(listener, path)
             }
         }
+        // Preserve the original callback scheduling used for libbox's default
+        // interface listener; the diagnostic heartbeat has its own queue.
         monitor.start(queue: DispatchQueue.global())
+        let snapshotTimer = DispatchSource.makeTimerSource(queue: underlyingNetworkSnapshotQueue)
+        snapshotTimer.schedule(deadline: .now() + 60, repeating: 60)
+        snapshotTimer.setEventHandler { [weak self, weak monitor] in
+            guard let self, let monitor else { return }
+            self.updateUnderlyingNetworkStatus(monitor.currentPath)
+        }
+        underlyingNetworkSnapshotTimer = snapshotTimer
+        snapshotTimer.resume()
         semaphore.wait()
     }
 
@@ -306,15 +321,33 @@ public class ExtensionPlatformInterface: NSObject, LibboxPlatformInterfaceProtoc
         guard path.status != .unsatisfied,
               let defaultInterface = path.availableInterfaces.first
         else {
+            UnderlyingNetworkStatusStore.clear()
             listener.updateDefaultInterface("", interfaceIndex: -1, isExpensive: false, isConstrained: false)
             return
         }
+        // Keep the interface passed to libbox exactly as before. The preferred
+        // physical interface is only an observational dashboard snapshot and
+        // must never change core routing behavior.
+        updateUnderlyingNetworkStatus(path)
         listener.updateDefaultInterface(defaultInterface.name, interfaceIndex: Int32(defaultInterface.index), isExpensive: path.isExpensive, isConstrained: path.isConstrained)
     }
 
+    private func updateUnderlyingNetworkStatus(_ path: Network.NWPath) {
+        if let diagnosticInterface = UnderlyingNetworkStatus.preferredInterface(from: path),
+           let status = UnderlyingNetworkStatus.capture(from: path, preferredInterface: diagnosticInterface)
+        {
+            UnderlyingNetworkStatusStore.write(status)
+        } else {
+            UnderlyingNetworkStatusStore.clear()
+        }
+    }
+
     public func closeDefaultInterfaceMonitor(_: LibboxInterfaceUpdateListenerProtocol?) throws {
+        underlyingNetworkSnapshotTimer?.cancel()
+        underlyingNetworkSnapshotTimer = nil
         nwMonitor?.cancel()
         nwMonitor = nil
+        UnderlyingNetworkStatusStore.clear()
     }
 
     public func getInterfaces() throws -> LibboxNetworkInterfaceIteratorProtocol {
@@ -514,8 +547,11 @@ public class ExtensionPlatformInterface: NSObject, LibboxPlatformInterfaceProtoc
 
     func reset() {
         networkSettings = nil
+        underlyingNetworkSnapshotTimer?.cancel()
+        underlyingNetworkSnapshotTimer = nil
         nwMonitor?.cancel()
         nwMonitor = nil
+        UnderlyingNetworkStatusStore.clear()
         #if os(macOS)
             neighborCallbackListener?.invalidate()
             neighborCallbackListener = nil

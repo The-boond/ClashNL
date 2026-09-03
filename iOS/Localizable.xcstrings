@@ -5090,6 +5090,216 @@
           }
         }
       }
+    },
+    "Network Paths" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网络路径"
+          }
+        }
+      }
+    },
+    "Refresh network paths" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "刷新网络路径"
+          }
+        }
+      }
+    },
+    "Target" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "检测目标"
+          }
+        }
+      }
+    },
+    "Remote service" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "远程服务"
+          }
+        }
+      }
+    },
+    "This device" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本设备"
+          }
+        }
+      }
+    },
+    "Remote direct egress" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "远程直连出口"
+          }
+        }
+      }
+    },
+    "Physical direct egress" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "物理直连出口"
+          }
+        }
+      }
+    },
+    "System egress" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "系统出口"
+          }
+        }
+      }
+    },
+    "Remote default egress" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "远程默认出口"
+          }
+        }
+      }
+    },
+    "VPN default egress" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VPN 默认出口"
+          }
+        }
+      }
+    },
+    "default/final" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "默认/最终"
+          }
+        }
+      }
+    },
+    "Refresh required after a network or service change." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "网络或服务变化后需要重新刷新。"
+          }
+        }
+      }
+    },
+    "STUN observes a UDP NAT address only. It does not prove the HTTP/TCP or every-rule exit, and failure can mean that the selected outbound does not support UDP. Clash-converted profiles provide the direct outbound; other sing-box profiles may not." : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "STUN 只能观测 UDP 的 NAT 地址，不能证明 HTTP、TCP 或每条分流规则的出口；失败也可能只是所选出站不支持 UDP。Clash 转换的配置会提供 direct 出站，其他 sing-box 配置不一定提供。"
+          }
+        }
+      }
+    },
+    "Preferred upstream" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "首选上游"
+          }
+        }
+      }
+    },
+    "Not exposed by remote API" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "远程 API 未提供"
+          }
+        }
+      }
+    },
+    "Local interface address" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "本地接口地址"
+          }
+        }
+      }
+    },
+    "VPN is not connected" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "VPN 未连接"
+          }
+        }
+      }
+    },
+    "STUN returned no external address" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "STUN 未返回外部地址"
+          }
+        }
+      }
+    },
+    "STUN test failed" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "STUN 测试失败"
+          }
+        }
+      }
+    },
+    "Tap refresh" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "点按刷新"
+          }
+        }
+      }
+    },
+    "Other" : {
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "其他"
+          }
+        }
+      }
     }
   },
   "version" : "1.0"
