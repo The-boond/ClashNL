@@ -42,6 +42,9 @@ class AndroidMihomoController private constructor(context: Context) : MihomoCont
     private var currentConfig: MihomoConfig? = null
     private var currentHttpProxyPort: Int = 0
 
+    @Volatile
+    private var activeOfflineProbe: HeadlessProbeSession? = null
+
     private data class ApiGeneration(
         val client: MihomoApiClient,
     )
@@ -77,7 +80,7 @@ class AndroidMihomoController private constructor(context: Context) : MihomoCont
             ownsProbeCore = true
             MihomoNativeBridge.initialize(appContext)
             val generation = loadApiGeneration(config)
-            HeadlessProbeSession(generation.client, owner)
+            HeadlessProbeSession(generation.client, owner).also { activeOfflineProbe = it }
         } catch (exception: Throwable) {
             if (ownsProbeCore) {
                 runCatching { MihomoNativeBridge.stopCore() }
@@ -88,6 +91,10 @@ class AndroidMihomoController private constructor(context: Context) : MihomoCont
     }
 
     override suspend fun start(request: MihomoStartRequest) = withContext(Dispatchers.IO) {
+        // Opening the stopped-state node screen can start an exclusive latency
+        // probe. A user VPN start has priority and must not wait for the entire
+        // subscription probe to finish.
+        activeOfflineProbe?.close()
         mutex.withLock {
             check(_runtimeState.value == MihomoRuntimeState.Stopped) { "Mihomo is already active" }
             _runtimeState.value = MihomoRuntimeState.Starting
@@ -306,6 +313,9 @@ class AndroidMihomoController private constructor(context: Context) : MihomoCont
                 try {
                     MihomoNativeBridge.stopCore()
                 } finally {
+                    if (activeOfflineProbe === this@HeadlessProbeSession) {
+                        activeOfflineProbe = null
+                    }
                     mutex.unlock(owner)
                 }
             }

@@ -43,10 +43,43 @@ class DashboardProxySelectionTest {
         )
     }
 
-    private fun group(name: String, selected: String) = MihomoProxyGroup(
+    @Test
+    fun ruleModeChoosesUnreferencedRootRegardlessOfApiOrder() {
+        val groups = listOf(
+            group("AUTO", "Japan-Main", proxies = listOf("Japan-Main", "Japan-Backup")),
+            group("PROXY", "Japan-Dedicated-TCP", proxies = listOf("AUTO", "Japan-Dedicated-TCP")),
+            group("GLOBAL", "PROXY", proxies = listOf("PROXY", "DIRECT")),
+        )
+
+        assertEquals(
+            DashboardProxySelection("PROXY", "Japan-Dedicated-TCP"),
+            dashboardProxySelection("rule", groups),
+        )
+    }
+
+    @Test
+    fun ruleModeUsesProfileOrderWhenGroupGraphHasSeveralRoots() {
+        val groups = listOf(
+            group("AUTO", "Japan-Main", proxies = listOf("Japan-Main", "Japan-Backup")),
+            group("PROXY", "Japan-Dedicated-TCP", proxies = listOf("Japan-Dedicated-TCP", "DIRECT")),
+            group("GLOBAL", "PROXY", proxies = listOf("PROXY", "DIRECT")),
+        )
+
+        assertEquals(
+            DashboardProxySelection("PROXY", "Japan-Dedicated-TCP"),
+            dashboardProxySelection("rule", groups, preferredRuleGroup = "PROXY"),
+        )
+    }
+
+    private fun group(
+        name: String,
+        selected: String,
+        proxies: List<String> = emptyList(),
+    ) = MihomoProxyGroup(
         name = name,
         type = "Selector",
         selected = selected,
         selectable = true,
+        proxies = proxies.map { io.nekohasekai.sfa.mihomo.MihomoProxy(name = it, type = "") },
     )
 }

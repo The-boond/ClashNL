@@ -18,7 +18,9 @@ import io.nekohasekai.sfa.database.Profile
 import io.nekohasekai.sfa.database.ProfileManager
 import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
+import io.nekohasekai.sfa.mihomo.MihomoNativeBridge
 import io.nekohasekai.sfa.mihomo.MihomoNetworkMode
+import io.nekohasekai.sfa.mihomo.MihomoOfflineSelectionStore
 import io.nekohasekai.sfa.mihomo.MihomoProxyGroup
 import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
 import io.nekohasekai.sfa.mihomo.MihomoRuntimeState
@@ -49,6 +51,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONException
+import java.io.File
 import java.util.Collections
 import java.util.concurrent.atomic.AtomicLong
 
@@ -203,17 +206,39 @@ internal fun dashboardSelectionAction(
 internal fun dashboardProxySelection(
     mode: String,
     groups: List<MihomoProxyGroup>,
+    preferredRuleGroup: String? = null,
 ): DashboardProxySelection? {
     val groupsByName = groups.associateBy { it.name }
-    val root = when (mode.lowercase()) {
-        "direct" -> return DashboardProxySelection("DIRECT", "DIRECT")
-        "global" -> groupsByName["GLOBAL"]
-        else -> groups.firstOrNull {
-            it.name != "GLOBAL" && it.selectable && it.selected.isNotBlank()
-        } ?: groups.firstOrNull {
-            it.name != "GLOBAL" && it.selected.isNotBlank()
+    val root = (
+        when (mode.lowercase()) {
+            "direct" -> return DashboardProxySelection("DIRECT", "DIRECT")
+            "global" -> groupsByName["GLOBAL"]
+            else -> {
+                // Mihomo returns /proxies as a JSON object, so its iteration order is
+                // not the subscription's proxy-group order. Prefer a selectable root
+                // group that is not referenced by another group; otherwise an
+                // auxiliary url-test/fallback group can be shown as the active node.
+                val referencedGroups = groups
+                    .asSequence()
+                    .filter { it.name != "GLOBAL" }
+                    .flatMap { group -> group.proxies.asSequence().map { it.name } }
+                    .toSet()
+                preferredRuleGroup?.let(groupsByName::get)?.takeIf {
+                    it.name != "GLOBAL" && it.selected.isNotBlank()
+                } ?: groups.firstOrNull {
+                    it.name != "GLOBAL" &&
+                        it.name !in referencedGroups &&
+                        it.selectable &&
+                        it.selected.isNotBlank()
+                } ?: groups.firstOrNull {
+                    it.name != "GLOBAL" && it.selectable && it.selected.isNotBlank()
+                }
+            }
         }
-    } ?: return null
+        ) ?: groups.firstOrNull {
+        it.name != "GLOBAL" && it.selected.isNotBlank()
+    }
+        ?: return null
 
     var node = root.selected
     val visited = mutableSetOf(root.name)
@@ -790,7 +815,23 @@ class DashboardViewModel :
                 ?.lowercase()
                 ?.takeIf { it in LOCAL_CLASH_MODES }
                 ?: return@launch
-            val selection = dashboardProxySelection(mode, groups)
+            val preferredRuleGroup = runCatching {
+                val profile = ProfileManager.get(Settings.selectedProfile) ?: return@runCatching null
+                val groupsByName = groups.associateBy { it.name }
+                MihomoOfflineSelectionStore.selections(profile)
+                    .entries
+                    .firstOrNull { (group, proxy) ->
+                        groupsByName[group]?.takeIf { it.selectable }?.selected == proxy
+                    }
+                    ?.key
+                    ?: run {
+                        MihomoNativeBridge.initialize(Application.application)
+                        MihomoNativeBridge.describeProxyGroups(File(profile.typed.path).readText())
+                            .firstOrNull { it.name != "GLOBAL" && it.selectable }
+                            ?.name
+                    }
+            }.getOrNull()
+            val selection = dashboardProxySelection(mode, groups, preferredRuleGroup)
             withContext(Dispatchers.Main) {
                 if (
                     RemoteControlManager.remoteServer.value == null &&
