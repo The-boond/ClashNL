@@ -89,6 +89,7 @@ abiDefinitions.forEach { (abi, compiler) ->
         commandLine(
             "go",
             "build",
+            "-trimpath",
             "-tags",
             "foss,with_gvisor,cmfa",
             "-buildmode=c-shared",
