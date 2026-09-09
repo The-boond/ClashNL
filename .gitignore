@@ -18,3 +18,10 @@ AGENTS.md
 /iOS/fastlane/.cache/
 __pycache__/
 *.py[cod]
+
+# Local device captures can contain private network and account data.
+/*.xml
+/*.png
+/Android/running*.xml
+/Android/v*-final.xml
+/Android/installed-clashnl.apk

@@ -38,7 +38,7 @@ YAML 保存，并在导入、编辑、更新及启动前由 Mihomo 原生解析�
 Gradle 会为目标 ABI 构建 Mihomo bridge，然后打包 APK：
 
 ```powershell
-cd ClashNL\Android
+cd Android
 .\gradlew.bat :app:assembleOtherDebug
 ```
 

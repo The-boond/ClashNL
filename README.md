@@ -29,6 +29,8 @@ cd Android
 
 更多说明见 [`Android/README.md`](Android/README.md)。
 
+仓库隐私清理状态及发布资料约束见 [`docs/STATUS.md`](docs/STATUS.md)。
+
 ## Apple 平台
 
 iOS、macOS 与 tvOS 工程保留在 [`iOS/`](iOS/)，与 Android 工程独立维护。

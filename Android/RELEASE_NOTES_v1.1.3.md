@@ -14,8 +14,8 @@
 ## 真机验证
 
 - Android 16 / HyperOS 真机已验证 Wi-Fi `wlan0` 与蜂窝 `ccmni0` 自动切换。
-- Wi-Fi 物理出口为 `[network address removed]`，蜂窝物理出口为 `[network address removed]`；两种入口下当前日本节点出口均为 `[network address removed]`。
-- USB 共享客户端在 VPN 开关前后均显示 `[network address removed]`，证明 Android 普通 `VpnService` 不会透明接管热点/USB 转发流量。本版本没有宣称支持免 Root 的透明 VPN 热点。
+- 已验证 Wi-Fi 与蜂窝物理直连出口和代理出口能够分别识别；两种入口下代理出口符合所选节点配置。
+- USB 共享客户端在 VPN 开关前后出口保持一致，验证普通 Android `VpnService` 不会透明接管 USB 转发流量。
 - 109 项 Android 单元测试、Spotless、Lint Vital、Release APK、AndroidTest 打包和 Android 5 兼容编译通过。
 
 ## 使用边界
