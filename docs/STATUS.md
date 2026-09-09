@@ -18,7 +18,7 @@
 
 ## 最新安装包
 
-旧 v1.1.4 APK 原生库中发现本机构建路径残留，已从 Release 撤下。构建脚本增加 `-trimpath`，四种架构的原生核心已强制重新构建。五个最终 APK 的压缩条目与包体扫描均无已确认敏感值命中，APK 签名通过且证书与原发布版相同，已生成新的 SHA-256 校验文件。
+旧 v1.1.4 APK 原生库中发现本机构建路径残留，已删除并替换。构建脚本增加 `-trimpath`，四种架构的原生核心已强制重新构建。五个最终 APK 的压缩条目与包体扫描均无已确认敏感值命中，APK 签名通过且证书与原发布版相同。五个 APK 和新的 SHA-256 校验文件均已上传，GitHub 返回的大小与 SHA-256 全部匹配本地已验证产物。
 
 ## 验证与剩余边界
 
@@ -26,7 +26,8 @@
 - `:mihomo-bridge:buildMihomoLibraries --rerun-tasks` 成功，四个架构任务全部执行。
 - `:app:spotlessCheck :app:testOtherDebugUnitTest :app:lintVitalOtherRelease :app:assembleOtherRelease` 成功；未受影响的任务复用 Gradle 已有结果，原生库与 APK 已重新生成。
 - 本次尚未重新执行真机 VPN/ChatGPT 流程，历史真机结果不作为此次重新测试的证据。
+- 远端最终核对：1 个 Release、1 个标签、6 个已验证附件、0 个未关闭 PR。
 - GitHub 的旧提交缓存与只读 PR 引用需平台处理；已有第三方 fork/克隆无法由本仓库强制删除。不能据此宣称互联网所有副本已清除。
 - 历史已重写，不要将旧克隆直接合并或推回。后续开发应使用清理后的历史。
 
-工作分支：`codex/android-account-integration`。当前基线以 Git HEAD 为准。下一步：上传已验证的 v1.1.4 替换包并完成远端回读。
+工作分支：`codex/android-account-integration`。构建修复提交：`3853e68`。下一步：由仓库所有者向 GitHub Support 请求清理旧提交缓存及 PR 内部引用；草稿已经本地准备，尚未发送。
