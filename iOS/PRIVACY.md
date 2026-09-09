@@ -34,7 +34,7 @@ App Store 或 GitHub 的更新服务。VPN 开启后，流量会
 
 ### 联系
 
-隐私问题请联系：`PRIVACY_CONTACT_EMAIL`
+隐私问题请通过项目 GitHub Issues 联系维护者。请勿公开个人信息、订阅链接或日志原文。
 
 ## English
 
@@ -69,4 +69,4 @@ governed by that provider's privacy policy.
 
 ### Contact
 
-For privacy questions, contact: `PRIVACY_CONTACT_EMAIL`
+For privacy questions, contact the maintainers through GitHub Issues. Do not post personal information, subscription URLs, or raw logs.

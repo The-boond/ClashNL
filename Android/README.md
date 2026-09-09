@@ -47,7 +47,7 @@ bash scripts/build-libbox-android.sh
 然后构建 Android APK：
 
 ```powershell
-cd ClashNL\Android
+cd Android
 .\gradlew.bat :app:assembleOtherDebug
 ```
 

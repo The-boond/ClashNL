@@ -12,7 +12,7 @@ iOS/        iOS/macOS/tvOS Apple 客户端、Xcode 工程、Libbox 脚本和示�
 进入 [Android/README.md](Android/README.md)。
 
 ```powershell
-cd ClashNL\Android
+cd Android
 .\gradlew.bat :app:assembleOtherDebug
 ```
 
