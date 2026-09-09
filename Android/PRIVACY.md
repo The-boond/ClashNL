@@ -1,10 +1,7 @@
 # ClashNl Android Privacy Policy / Android 隐私政策
 
-Last updated / 最后更新：2026-09-04
+Last updated / 最后更新：2026-09-10
 
-> Public support address: `deng2504607315@gmail.com`.
->
-> 公开支持邮箱：`deng2504607315@gmail.com`。
 
 ## 中文
 
@@ -42,7 +39,7 @@ Cloudflare 会按其隐私政策处理这些网络请求。
 
 ### 联系
 
-隐私问题请联系：`deng2504607315@gmail.com`
+隐私问题请通过项目 GitHub Issues 联系维护者。请勿公开个人信息、订阅链接或日志原文。
 
 ## English
 
@@ -90,4 +87,4 @@ processes these requests under its privacy policy.
 
 ### Contact
 
-For privacy questions, contact: `deng2504607315@gmail.com`
+For privacy questions, contact the maintainers through GitHub Issues. Do not post personal information, subscription URLs, or raw logs.
