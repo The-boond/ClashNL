@@ -300,6 +300,12 @@ class MihomoVpnService :
         activeUnderlyingNetwork = UnderlyingNetworkTracker.current(refresh = true)?.network
         bindProcessToUnderlyingNetwork(activeUnderlyingNetwork)
         var establishedDevice: ParcelFileDescriptor? = null
+        val restoreProfileChoices: suspend () -> Unit = {
+            MihomoOfflineSelectionStore.applyPending(profile, controller)
+            Settings.mihomoClashMode.takeIf { it in SUPPORTED_CLASH_MODES }?.let { mode ->
+                controller.setMode(mode)
+            }
+        }
         try {
             val networkMode = MihomoNetworkMode.fromStorage(Settings.mihomoNetworkMode)
             activeNetworkMode = networkMode
@@ -311,6 +317,7 @@ class MihomoVpnService :
                         MihomoStartRequest(
                             config = MihomoConfig(content),
                             httpProxyPort = proxyPort,
+                            beforeReady = restoreProfileChoices,
                             // The controller invokes this only after it owns the exclusive
                             // runtime lease and has loaded the profile. This prevents both a
                             // stopped-state probe race and routing startup downloads into an
@@ -353,14 +360,11 @@ class MihomoVpnService :
                             config = MihomoConfig(content),
                             httpProxyPort = proxyPort,
                             socketCallback = this,
+                            beforeReady = restoreProfileChoices,
                         ),
                     )
                     establishedDevice = establishSystemProxy(proxyPort)
                 }
-            }
-            MihomoOfflineSelectionStore.applyPending(profile, controller)
-            Settings.mihomoClashMode.takeIf { it in SUPPORTED_CLASH_MODES }?.let { mode ->
-                controller.setMode(mode)
             }
             tun = checkNotNull(establishedDevice) { "Mihomo did not establish a VPN device" }
         } catch (exception: Exception) {

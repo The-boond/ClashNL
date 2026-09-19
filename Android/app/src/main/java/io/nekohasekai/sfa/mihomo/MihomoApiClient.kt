@@ -68,6 +68,8 @@ internal class MihomoApiClient(
 
     fun getMode(): String = request("configs").use(::requireJson).optString("mode", "rule")
 
+    fun getDefaultRuleTarget(): String? = request("rules").use(::requireJson).defaultRuleTarget()
+
     fun requireHttpProxyPort(expectedPort: Int) {
         val actualPort = request("configs").use(::requireJson).optInt("port", 0)
         check(actualPort == expectedPort) {
@@ -317,6 +319,17 @@ internal fun JSONObject.optMihomoDelay(): Int? {
 private inline fun JSONArray.lastPositiveDelay(valueOf: (Any?) -> Any?): Int? {
     for (index in length() - 1 downTo 0) {
         valueOf(opt(index)).toPositiveDelay()?.let { return it }
+    }
+    return null
+}
+
+internal fun JSONObject.defaultRuleTarget(): String? {
+    val rules = optJSONArray("rules") ?: return null
+    for (index in 0 until rules.length()) {
+        val rule = rules.optJSONObject(index) ?: continue
+        if (!rule.optString("type").equals("Match", ignoreCase = true)) continue
+        if (rule.optJSONObject("extra")?.optBoolean("disabled") == true) continue
+        return rule.optString("proxy").takeIf { it.isNotBlank() }
     }
     return null
 }

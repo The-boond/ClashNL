@@ -30,6 +30,8 @@ interface MihomoController {
 
     suspend fun getMode(): String
 
+    suspend fun getDefaultRuleTarget(): String?
+
     suspend fun setMode(mode: String)
 
     suspend fun selectProxy(group: String, proxy: String)

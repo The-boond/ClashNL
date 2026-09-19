@@ -7,6 +7,26 @@ import org.junit.Test
 
 class MihomoApiClientTest {
     @Test
+    fun `default route uses first enabled Match instead of service rules`() {
+        val response = JSONObject(
+            """{"rules":[
+              {"type":"DomainSuffix","proxy":"Service"},
+              {"type":"Match","proxy":"Old","extra":{"disabled":true}},
+              {"type":"Match","proxy":"Main","extra":{"disabled":false}},
+              {"type":"Match","proxy":"Unreachable"}
+            ]}""",
+        )
+        assertEquals("Main", response.defaultRuleTarget())
+    }
+
+    @Test
+    fun `default route accepts direct and absent match`() {
+        assertEquals("DIRECT", JSONObject("""{"rules":[{"type":"Match","proxy":"DIRECT"}]}""").defaultRuleTarget())
+        assertNull(JSONObject("""{"rules":[{"type":"Domain","proxy":"Service"}]}""").defaultRuleTarget())
+        assertNull(JSONObject("""{"rules":[]}""").defaultRuleTarget())
+    }
+
+    @Test
     fun `history array uses last valid positive delay`() {
         val proxy = JSONObject(
             """

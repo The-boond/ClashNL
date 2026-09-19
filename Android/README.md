@@ -73,6 +73,28 @@ ALIAS_PASS=CHANGE_ME
 
 ## 验证
 
+### 仪表盘当前节点
+
+启动时先恢复当前配置保存的节点和代理模式，再发布核心 `Running` 状态。
+仪表盘首次读取必须发生在恢复完成之后，避免保存选择已经生效，界面仍
+停留在 YAML 默认节点。虚拟网卡和系统代理共用此启动顺序。
+
+规则模式优先使用运行中 Mihomo `/rules` 的首个启用 `Match` 规则目标，
+再沿 `/proxies` 的 `now` 链显示最终节点。地区组或服务分流组的历史手动
+选择不决定仪表盘显示哪个主组。全局模式沿 `GLOBAL` 解析，直连模式显示
+`DIRECT`。没有 `Match` 的配置暂时保留配置顺序及组关系的兼容回退。
+
+此节点代表默认规则路径；更早匹配的域名、规则集等可以使用其他节点，
+出口 IP 探测也受这些规则影响，不能据一个 IP 判定所有连接的出口。
+
+回归场景：主组选择节点 C，首次从代理组页面将未使用的地区组切到节点 B，
+仪表盘应继续显示 C；主组切到该地区组后才显示 B。覆盖 API 返回顺序变化、
+自动组嵌套、直连/全局模式及循环或未解析的选择链。
+另需验证停止 VPN 后从订阅页选择非默认节点，启动后的第一次显示与实际
+出口一致；运行中从订阅页切换后也应更新。原生测试
+`firstRunningSnapshotIncludesRestoredNodeAndMode` 在恢复期间注入延迟，断言
+首个 `Running` 快照已经包含恢复后的节点和模式。
+
 ```powershell
 .\gradlew.bat :app:spotlessCheck :app:testOtherDebugUnitTest `
   :app:lintVitalOtherRelease :app:assembleOtherRelease `

@@ -71,6 +71,7 @@ android {
         applicationId = "com.clashnl.android"
         minSdk = 24
         targetSdk = 35
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         versionCode = getVersionProps("VERSION_CODE").toInt()
         versionName = getVersionProps("VERSION_NAME")
         buildConfigField("String", "CORE_VERSION", "\"${getVersionProps("CORE_VERSION")}\"")

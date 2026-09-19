@@ -1,5 +1,21 @@
 # 仓库隐私与发布状态
 
+## 当前开发检查点：仪表盘节点选择（2026-09-19）
+
+- 目标：首次从仪表盘以外的入口选节点后，仪表盘按运行中的默认路由选择链显示，不能把未使用的地区/分流组当作主组。
+- 已确认主因：控制器先发布 `Running`，VPN 服务随后才恢复保存节点及模式；仪表盘在恢复前读取默认节点，恢复后没有新状态通知。真机旧版重现“主组美国、仪表盘日本、出口美国”。仅修正主组识别仍复现，修正启动顺序后消失。
+- 另一显示缺陷：旧实现优先使用选择文件中首个与核心选择一致的组；地区/服务组可能因此被误当作主组。
+- 修改：`MihomoStartRequest.beforeReady` 在启动发布 `Running` 前恢复选择和模式，虚拟网卡/系统代理都接入。通过控制器读取 `/rules` 首个启用 `Match` 的目标，沿实时 `/proxies` 解析；移除显示逻辑对历史选择文件的依赖。无 Match 时保留兼容回退；规则分流可以产生不同出口，详见 [Android 说明](../Android/README.md#仪表盘当前节点)。
+- 代码：`bg/MihomoVpnService.kt`、`mihomo/MihomoModels.kt`、`AndroidMihomoController.kt`、`MihomoController.kt`、`MihomoApiClient.kt`、`DashboardViewModel.kt`；JVM 回归和 `MihomoNativeBridgeInstrumentedTest`，以及明确 AndroidJUnitRunner 的测试配置。
+- 本地通过：Java 17 下 `:app:spotlessApply :app:spotlessCheck :app:testOtherDebugUnitTest :app:assembleOtherDebug :app:assembleOtherDebugAndroidTest :app:lintVitalOtherRelease`；118 项 JVM 测试零失败。Debug APK、原生测试 APK 均已构建。
+- 扩展检查限制：完整 `lintOtherDebug` 在 Java 17 的依赖分析中因 `List.removeLast()` 缺失崩溃；临时改用本机 JBR 25 又触发既有模块 Java 17/Kotlin 25 目标不一致。未禁用检查或修改工具链；不能称完整 Lint 通过。
+- 真机通过：用户连接手机后覆盖安装修复 Debug 包，保留应用数据；同配置首次启动显示美国且出口美国；运行中从订阅页切到日本，显示及出口同步；停止后从订阅页选美国再启动，首次显示及出口仍正确。全程未通过仪表盘节点入口补选。测试结束恢复原订阅、原美国节点选择及原先停止状态，删除本轮临时 UI 转储。
+- 原生仪器测试已编译但未执行：手机拒绝辅助测试 APK 安装（`INSTALL_FAILED_USER_RESTRICTED`）；未绕过设备确认。已完成上述真实 UI/网络路径验证，但未做长时间网络或系统代理真机回归。
+- 分支：`codex/android-account-integration`；提交前基线 `dad4e61`。本轮修改待本地提交，无先存未提交修改；下一轮通过 Git HEAD 读取最终提交。
+- 下一步：用户使用手机上已安装的修复包反馈；未发布或推送，未修改订阅正文。当前没有必须等待的用户批准事项。
+
+## 历史隐私与发布检查点
+
 日期：2026-09-10。
 
 ## 目标与授权

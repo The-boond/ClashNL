@@ -5,7 +5,14 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import io.nekohasekai.sfa.compose.MainActivity
+import io.nekohasekai.sfa.compose.screen.dashboard.DashboardProxySelection
+import io.nekohasekai.sfa.compose.screen.dashboard.dashboardProxySelection
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -21,6 +28,80 @@ import kotlin.concurrent.thread
 
 @RunWith(AndroidJUnit4::class)
 class MihomoNativeBridgeInstrumentedTest {
+    @Test
+    fun firstRunningSnapshotIncludesRestoredNodeAndMode() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val controller = MihomoRuntimeRepository.controller(context)
+        val firstRunning = async(start = CoroutineStart.UNDISPATCHED) {
+            withTimeout(10_000) {
+                controller.runtimeState.first { it == MihomoRuntimeState.Running }
+                controller.getMode() to controller.getProxyGroups().first { it.name == "Proxy" }.selected
+            }
+        }
+        try {
+            controller.start(
+                MihomoStartRequest(
+                    config = configWithProxy("Initial"),
+                    beforeReady = {
+                        assertEquals(MihomoRuntimeState.Starting, controller.runtimeState.value)
+                        delay(250)
+                        controller.selectProxy("Proxy", "DIRECT")
+                        controller.setMode("global")
+                    },
+                ),
+            )
+            assertEquals("global" to "DIRECT", firstRunning.await())
+        } finally {
+            firstRunning.cancel()
+            controller.stop()
+        }
+    }
+
+    @Test
+    fun unusedRegionSelectionDoesNotChangeDashboardDefaultRoute() = runBlocking {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val controller = MihomoRuntimeRepository.controller(context)
+        try {
+            controller.start(
+                MihomoStartRequest(
+                    MihomoConfig(
+                        """
+                        proxies:
+                          - {name: Test-A, type: direct}
+                          - {name: Test-B, type: direct}
+                          - {name: Test-C, type: direct}
+                        proxy-groups:
+                          - name: Region
+                            type: select
+                            proxies: [Test-A, Test-B]
+                          - name: Main
+                            type: select
+                            proxies: [Test-C, Region]
+                        rules:
+                          - DOMAIN,service.invalid,Region
+                          - MATCH,Main
+                        """.trimIndent(),
+                    ),
+                ),
+            )
+            controller.setMode("rule")
+            controller.selectProxy("Main", "Test-C")
+            controller.selectProxy("Region", "Test-B")
+            assertEquals("Main", controller.getDefaultRuleTarget())
+            assertEquals(
+                DashboardProxySelection("Main", "Test-C"),
+                dashboardProxySelection(controller.getMode(), controller.getProxyGroups(), defaultRuleTarget = controller.getDefaultRuleTarget()),
+            )
+            controller.selectProxy("Main", "Region")
+            assertEquals(
+                DashboardProxySelection("Main", "Test-B"),
+                dashboardProxySelection(controller.getMode(), controller.getProxyGroups(), defaultRuleTarget = controller.getDefaultRuleTarget()),
+            )
+        } finally {
+            controller.stop()
+        }
+    }
+
     @Test
     fun doesNotLoadLegacyLibboxIntoTheMihomoProcess() {
         val loadedLibraries = java.io.File("/proc/self/maps").readText()

@@ -130,6 +130,7 @@ class AndroidMihomoController private constructor(context: Context) : MihomoCont
                 installApiGeneration(generation)
                 currentConfig = request.config
                 currentHttpProxyPort = httpProxyPort
+                request.beforeReady?.invoke()
                 _runtimeState.value = MihomoRuntimeState.Running
             } catch (exception: Exception) {
                 _runtimeState.value = MihomoRuntimeState.Failed
@@ -178,6 +179,8 @@ class AndroidMihomoController private constructor(context: Context) : MihomoCont
     override suspend fun getProxyGroups(): List<MihomoProxyGroup> = withContext(Dispatchers.IO) { requireApi().getProxyGroups() }
 
     override suspend fun getMode(): String = withContext(Dispatchers.IO) { requireApi().getMode() }
+
+    override suspend fun getDefaultRuleTarget(): String? = withContext(Dispatchers.IO) { requireApi().getDefaultRuleTarget() }
 
     override suspend fun setMode(mode: String) = withContext(Dispatchers.IO) {
         requireApi()

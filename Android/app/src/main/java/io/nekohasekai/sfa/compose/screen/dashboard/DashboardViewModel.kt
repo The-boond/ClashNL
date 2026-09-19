@@ -20,7 +20,6 @@ import io.nekohasekai.sfa.database.Settings
 import io.nekohasekai.sfa.database.TypedProfile
 import io.nekohasekai.sfa.mihomo.MihomoNativeBridge
 import io.nekohasekai.sfa.mihomo.MihomoNetworkMode
-import io.nekohasekai.sfa.mihomo.MihomoOfflineSelectionStore
 import io.nekohasekai.sfa.mihomo.MihomoProxyGroup
 import io.nekohasekai.sfa.mihomo.MihomoRuntimeRepository
 import io.nekohasekai.sfa.mihomo.MihomoRuntimeState
@@ -207,8 +206,16 @@ internal fun dashboardProxySelection(
     mode: String,
     groups: List<MihomoProxyGroup>,
     preferredRuleGroup: String? = null,
+    defaultRuleTarget: String? = null,
 ): DashboardProxySelection? {
     val groupsByName = groups.associateBy { it.name }
+    // A saved choice in a region/service group does not make that group active.
+    // Follow the running core's catch-all rule, then its live `now` chain.
+    if (mode.lowercase() !in setOf("direct", "global") && !defaultRuleTarget.isNullOrBlank()) {
+        if (defaultRuleTarget !in groupsByName) {
+            return DashboardProxySelection(defaultRuleTarget, defaultRuleTarget)
+        }
+    }
     val root = (
         when (mode.lowercase()) {
             "direct" -> return DashboardProxySelection("DIRECT", "DIRECT")
@@ -223,7 +230,7 @@ internal fun dashboardProxySelection(
                     .filter { it.name != "GLOBAL" }
                     .flatMap { group -> group.proxies.asSequence().map { it.name } }
                     .toSet()
-                preferredRuleGroup?.let(groupsByName::get)?.takeIf {
+                defaultRuleTarget?.let(groupsByName::get) ?: preferredRuleGroup?.let(groupsByName::get)?.takeIf {
                     it.name != "GLOBAL" && it.selected.isNotBlank()
                 } ?: groups.firstOrNull {
                     it.name != "GLOBAL" &&
@@ -244,7 +251,7 @@ internal fun dashboardProxySelection(
     val visited = mutableSetOf(root.name)
     while (node.isNotBlank()) {
         val nested = groupsByName[node] ?: break
-        if (!visited.add(nested.name) || nested.selected.isBlank()) break
+        if (!visited.add(nested.name) || nested.selected.isBlank()) return null
         node = nested.selected
     }
     return node.takeIf(String::isNotBlank)?.let { DashboardProxySelection(root.name, it) }
@@ -815,23 +822,29 @@ class DashboardViewModel :
                 ?.lowercase()
                 ?.takeIf { it in LOCAL_CLASH_MODES }
                 ?: return@launch
-            val preferredRuleGroup = runCatching {
-                val profile = ProfileManager.get(Settings.selectedProfile) ?: return@runCatching null
-                val groupsByName = groups.associateBy { it.name }
-                MihomoOfflineSelectionStore.selections(profile)
-                    .entries
-                    .firstOrNull { (group, proxy) ->
-                        groupsByName[group]?.takeIf { it.selectable }?.selected == proxy
-                    }
-                    ?.key
-                    ?: run {
-                        MihomoNativeBridge.initialize(Application.application)
-                        MihomoNativeBridge.describeProxyGroups(File(profile.typed.path).readText())
-                            .firstOrNull { it.name != "GLOBAL" && it.selectable }
-                            ?.name
-                    }
-            }.getOrNull()
-            val selection = dashboardProxySelection(mode, groups, preferredRuleGroup)
+            val defaultRuleTarget = if (mode == "rule") {
+                try {
+                    mihomoController.getDefaultRuleTarget()
+                } catch (exception: CancellationException) {
+                    throw exception
+                } catch (_: Exception) {
+                    return@launch
+                }
+            } else {
+                null
+            }
+            val preferredRuleGroup = if (mode == "rule" && defaultRuleTarget == null) {
+                runCatching {
+                    val profile = ProfileManager.get(Settings.selectedProfile) ?: return@runCatching null
+                    MihomoNativeBridge.initialize(Application.application)
+                    MihomoNativeBridge.describeProxyGroups(File(profile.typed.path).readText())
+                        .firstOrNull { it.name != "GLOBAL" && it.selectable }
+                        ?.name
+                }.getOrNull()
+            } else {
+                null
+            }
+            val selection = dashboardProxySelection(mode, groups, preferredRuleGroup, defaultRuleTarget)
             withContext(Dispatchers.Main) {
                 if (
                     RemoteControlManager.remoteServer.value == null &&

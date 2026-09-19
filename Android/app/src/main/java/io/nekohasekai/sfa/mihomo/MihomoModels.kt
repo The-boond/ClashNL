@@ -12,6 +12,8 @@ data class MihomoStartRequest(
     val socketCallback: MihomoTunCallback? = null,
     val tun: MihomoTunDevice? = null,
     val tunFactory: (suspend () -> MihomoTunDevice)? = null,
+    /** Restore profile choices through the API before publishing Running. Must not call start/stop/reload. */
+    val beforeReady: (suspend () -> Unit)? = null,
 )
 
 data class MihomoTunDevice(
