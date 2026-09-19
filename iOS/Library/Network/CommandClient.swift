@@ -204,6 +204,9 @@ public class CommandClient: ObservableObject {
         if isConnected {
             isConnected = false
         }
+        groups = nil
+        outbounds = nil
+        clashMode = ""
     }
 
     private func flushPendingLogs() {
@@ -369,6 +372,9 @@ public class CommandClient: ObservableObject {
                     commandClient.lastError = ConnectionError(kind: .connectionLost, message: message)
                 }
                 commandClient.isConnected = false
+                commandClient.groups = nil
+                commandClient.outbounds = nil
+                commandClient.clashMode = ""
             }
             if let message {
                 logger.debug("client disconnected: \(message)")

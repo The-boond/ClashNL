@@ -7,6 +7,14 @@ Clash/Mihomo YAML 严格转换为原生 sing-box JSON。
 > 当前阶段：Apple 客户端 MVP。核心配置转换器及现代协议示例已通过自动化测试和
 > sing-box 1.14 配置检查；平台签名、真机回归及商店审核材料需在发布账号下完成。
 
+当前源码预览说明见 [Preview 3](RELEASE_NOTES_0.1.0-preview.3.md)，
+节点显示修复及验证边界见 [STATUS.md](STATUS.md)。
+
+仪表盘节点按正在运行的隧道配置及核心实时选择解析，不按代理组列表顺序
+猜测主组。节点页只展示核心确认的选择，断线后不保留上一会话的选中项。
+在有 Swift 编译器的 macOS 上可运行 `bash scripts/test-proxy-selection.sh`
+验证路由解析逻辑；这不替代 Xcode 应用构建或 iPhone VPN 测试。
+
 ## ClashNL 第一批 iOS 体验改造
 
 - 新建配置菜单提供独立的 **Add Subscription URL** 入口，打开后直接进入远程订阅表单；

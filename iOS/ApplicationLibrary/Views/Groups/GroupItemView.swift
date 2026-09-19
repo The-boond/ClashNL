@@ -18,7 +18,7 @@ public struct GroupItemView: View {
 
     public var body: some View {
         Button {
-            if group.selectable, group.selected != item.tag {
+            if group.selectable {
                 listViewModel.selectOutbound(groupTag: group.tag, outboundTag: item.tag)
             }
         } label: {

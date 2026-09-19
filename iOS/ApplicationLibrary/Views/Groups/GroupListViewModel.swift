@@ -6,7 +6,7 @@ import SwiftUI
 public class GroupListViewModel: BaseViewModel {
     @Published public var groups: [OutboundGroup] = []
 
-    private var pendingSelections: [String: String] = [:]
+    private var selectionTasks: [String: Task<Void, Never>] = [:]
 
     override public init() {
         super.init()
@@ -32,7 +32,17 @@ public class GroupListViewModel: BaseViewModel {
     }
 
     public func setGroups(_ goGroups: [LibboxOutboundGroup]?) {
-        guard let goGroups else { return }
+        guard let goGroups else {
+            selectionTasks.values.forEach { $0.cancel() }
+            selectionTasks.removeAll()
+            // Retain the rows backing an open detail view, but never retain
+            // its old checkmark across a disconnected/replaced core session.
+            for index in groups.indices {
+                groups[index].selected = ""
+            }
+            isLoading = true
+            return
+        }
 
         let existingGroups = Dictionary(uniqueKeysWithValues: groups.map { ($0.tag, $0) })
 
@@ -44,21 +54,12 @@ public class GroupListViewModel: BaseViewModel {
                 items.append(OutboundGroupItem(itemIterator.next()!))
             }
 
-            var selected = goGroup.selected
-            if let pending = pendingSelections[goGroup.tag] {
-                if goGroup.selected == pending {
-                    pendingSelections.removeValue(forKey: goGroup.tag)
-                } else {
-                    selected = pending
-                }
-            }
-
             let isExpand = existingGroups[goGroup.tag]?.isExpand ?? goGroup.isExpand
 
             newGroups.append(OutboundGroup(
                 tag: goGroup.tag,
                 type: goGroup.type,
-                selected: selected,
+                selected: goGroup.selected,
                 selectable: goGroup.selectable,
                 isExpand: isExpand,
                 items: items
@@ -69,12 +70,14 @@ public class GroupListViewModel: BaseViewModel {
     }
 
     public func selectOutbound(groupTag: String, outboundTag: String) {
-        if let index = groups.firstIndex(where: { $0.tag == groupTag }) {
-            groups[index].selected = outboundTag
-        }
-        pendingSelections[groupTag] = outboundTag
-
-        Task {
+        guard !isLoading else { return }
+        // Keep the last core-confirmed selection visible. A failed or delayed
+        // request must not leave this page claiming a node that is not in use.
+        // Serialize clicks in each group so an earlier request cannot win last.
+        let previous = selectionTasks[groupTag]
+        selectionTasks[groupTag] = Task {
+            await previous?.value
+            guard !Task.isCancelled, !isLoading else { return }
             await doSelectOutbound(groupTag: groupTag, outboundTag: outboundTag)
         }
     }
@@ -83,6 +86,7 @@ public class GroupListViewModel: BaseViewModel {
         do {
             try await CommandTarget.standaloneClient().selectOutbound(groupTag, outboundTag: outboundTag)
         } catch {
+            guard !Task.isCancelled else { return }
             await MainActor.run {
                 alert = AlertState(action: "select outbound", error: error)
             }

@@ -9,6 +9,7 @@
     public struct DashboardServiceCard: View {
         @EnvironmentObject private var profile: ExtensionProfile
         @ObservedObject private var commandClient: CommandClient
+        @State private var runtimeRouting: RuntimeProxyRouting?
 
         @Binding private var profileList: [ProfilePreview]
         @Binding private var selectedProfileID: Int64
@@ -28,27 +29,24 @@
         }
 
         private var currentProxySelection: String {
-            guard profile.status.isConnected else {
+            guard profile.status == .connected else {
                 return String(localized: "No active node")
             }
-            let selectableGroups = commandClient.groups?
-                .filter { $0.selectable && !$0.selected.isEmpty } ?? []
-            let isGlobalMode = commandClient.clashMode.compare(
-                "global",
-                options: [.caseInsensitive, .diacriticInsensitive]
-            ) == .orderedSame
-            let group: LibboxOutboundGroup?
-            if isGlobalMode {
-                group = selectableGroups.first
-            } else {
-                group = selectableGroups.first {
-                    $0.tag.caseInsensitiveCompare("GLOBAL") != .orderedSame
-                } ?? selectableGroups.first
+            guard commandClient.isConnected, let runtimeRouting, let groups = commandClient.groups else {
+                return String(localized: "Not available")
             }
-            guard let group else {
-                return String(localized: "No active node")
+            var selections: [String: String] = [:]
+            for group in groups {
+                selections[group.tag] = group.selected
             }
-            return "\(group.tag) · \(group.selected)"
+            guard let selection = runtimeRouting.selection(mode: commandClient.clashMode, selections: selections) else {
+                return String(localized: "Not available")
+            }
+            return selection.group == selection.node ? selection.node : "\(selection.group) · \(selection.node)"
+        }
+
+        private var routingSessionKey: String {
+            "\(selectedProfileID):\(profile.status.rawValue):\(profile.connectedDate?.timeIntervalSince1970 ?? 0):\(commandClient.isConnected)"
         }
 
         private var currentMode: String {
@@ -101,6 +99,13 @@
                         presentation: .prominent
                     )
                 }
+            }
+            .task(id: routingSessionKey) {
+                runtimeRouting = nil
+                guard profile.status == .connected, commandClient.isConnected else { return }
+                let routing = await profile.runtimeProxyRouting()
+                guard !Task.isCancelled else { return }
+                runtimeRouting = routing
             }
         }
 

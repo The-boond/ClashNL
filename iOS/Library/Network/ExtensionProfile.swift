@@ -226,6 +226,21 @@ public class ExtensionProfile: ObservableObject {
         }
     }
 
+    public func runtimeProxyRouting() async -> RuntimeProxyRouting? {
+        guard status == .connected, let session = connection as? NETunnelProviderSession else { return nil }
+        let data: Data? = await withCheckedContinuation { continuation in
+            let reply = RuntimeProxyRoutingReply { continuation.resume(returning: $0) }
+            DispatchQueue.global().asyncAfter(deadline: .now() + 3) { reply.finish(nil) }
+            do {
+                try session.sendProviderMessage(RuntimeProxyRouting.request) { reply.finish($0) }
+            } catch {
+                reply.finish(nil)
+            }
+        }
+        guard !Task.isCancelled, let data else { return nil }
+        return try? JSONDecoder().decode(RuntimeProxyRouting.self, from: data)
+    }
+
     private func prepareStartOptions() async throws -> [String: NSObject] {
         var options: [String: NSObject] = [
             "manualStart": NSNumber(value: true),

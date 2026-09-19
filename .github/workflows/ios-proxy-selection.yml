@@ -1,0 +1,24 @@
+name: Verify iOS proxy selection
+
+on:
+  push:
+    paths:
+      - "iOS/Library/Network/**"
+      - "iOS/ApplicationLibrary/Views/Dashboard/Cards/DashboardServiceCard.swift"
+      - "iOS/ApplicationLibrary/Views/Groups/**"
+      - "iOS/scripts/test-proxy-selection.sh"
+      - "iOS/scripts/tests/**"
+      - ".github/workflows/ios-proxy-selection.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  selection-regression:
+    runs-on: macos-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile and test the production routing resolver
+        run: bash iOS/scripts/test-proxy-selection.sh

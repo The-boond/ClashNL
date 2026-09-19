@@ -16,6 +16,21 @@ open class ExtensionProvider: NEPacketTunnelProvider {
     private lazy var platformInterface = ExtensionPlatformInterface(self)
     public var tunnelOptions: [String: NSObject]?
     private var startOptionsURL: URL?
+    private let routingLock = NSLock()
+    private var runtimeRouting: RuntimeProxyRouting?
+
+    private func setRuntimeRouting(_ routing: RuntimeProxyRouting?) {
+        routingLock.lock()
+        runtimeRouting = routing
+        routingLock.unlock()
+    }
+
+    private func runtimeRoutingResponse() -> Data? {
+        routingLock.lock()
+        let routing = runtimeRouting
+        routingLock.unlock()
+        return routing.flatMap { try? JSONEncoder().encode($0) }
+    }
 
     public struct OverridePreferences {
         public var includeAllNetworks: Bool = false
@@ -226,6 +241,7 @@ open class ExtensionProvider: NEPacketTunnelProvider {
     }
 
     private func startService() async throws {
+        setRuntimeRouting(nil)
         guard let configContent = tunnelOptions?["configContent"] as? String else {
             throw ExtensionStartupError("(packet-tunnel) error: missing configContent in tunnel options")
         }
@@ -236,6 +252,9 @@ open class ExtensionProvider: NEPacketTunnelProvider {
         } catch {
             throw ExtensionStartupError("(packet-tunnel) error: start service: \(error.localizedDescription)")
         }
+        // Selector cache restoration happens inside core startup. Publish the
+        // accepted route only after that completes, before startTunnel returns.
+        setRuntimeRouting(RuntimeProxyRouting.parse(configContent))
         #if os(macOS)
             if !Variant.useSystemExtension, commandServer!.needWIFIState() {
                 locationManager = CLLocationManager()
@@ -259,6 +278,7 @@ open class ExtensionProvider: NEPacketTunnelProvider {
     #endif
 
     func stopService() {
+        setRuntimeRouting(nil)
         do {
             try commandServer?.closeService()
         } catch {
@@ -306,6 +326,9 @@ open class ExtensionProvider: NEPacketTunnelProvider {
     }
 
     override open func handleAppMessage(_ messageData: Data) async -> Data? {
+        if messageData == RuntimeProxyRouting.request {
+            return runtimeRoutingResponse()
+        }
         do {
             let options = try ExtensionStartOptions.decode(messageData)
             try applyStartOptions(options)

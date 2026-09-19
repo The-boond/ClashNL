@@ -132,7 +132,7 @@ public struct GroupListView: View {
                 Section {
                     ForEach(group.items, id: \.tag) { item in
                         Button {
-                            guard group.selectable, group.selected != item.tag else { return }
+                            guard group.selectable else { return }
                             viewModel.selectOutbound(groupTag: group.tag, outboundTag: item.tag)
                         } label: {
                             HStack(spacing: 12) {
