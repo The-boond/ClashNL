@@ -76,10 +76,12 @@ import SwiftUI
                             }
                         }
                         ToolbarItem(placement: .confirmationAction) {
-                            Button("Done") {
+                            Button {
                                 dismiss()
+                            } label: {
+                                Text("Done")
+                                    .fontWeight(.semibold)
                             }
-                            .fontWeight(.semibold)
                         }
                     }
             }

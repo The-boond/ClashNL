@@ -4,7 +4,7 @@ on:
   push:
     paths:
       - "iOS/Library/Network/**"
-      - "iOS/ApplicationLibrary/Views/Dashboard/Cards/DashboardServiceCard.swift"
+      - "iOS/ApplicationLibrary/Views/Dashboard/Cards/**"
       - "iOS/ApplicationLibrary/Views/Groups/**"
       - "iOS/scripts/test-proxy-selection.sh"
       - "iOS/scripts/build-libbox.sh"

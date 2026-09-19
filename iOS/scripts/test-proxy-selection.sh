@@ -16,6 +16,7 @@ for source in \
   Library/Network/ExtensionProfile.swift \
   Library/Network/CommandClient.swift \
   ApplicationLibrary/Views/Dashboard/Cards/DashboardServiceCard.swift \
+  ApplicationLibrary/Views/Dashboard/Cards/CardManagementSheet.swift \
   ApplicationLibrary/Views/Groups/GroupListViewModel.swift \
   ApplicationLibrary/Views/Groups/GroupListView.swift \
   ApplicationLibrary/Views/Groups/GroupItemView.swift; do
