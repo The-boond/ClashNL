@@ -6,8 +6,10 @@
 - 版本：`VERSION_NAME=1.1.5`、`VERSION_CODE=18`；节点修复基线 `2acbcfb`，发布说明见 [v1.1.5](releases/v1.1.5.md)。
 - 隐私：源码、本次提交、四张现有商店截图及五个最终 APK（含解压条目）已检查，未命中已确认的个人地址、用户名、工作目录路径或凭据。测试中的公网 A/AAAA 地址已替换为文档保留地址。运行配置、密钥、设备截图与本地审计资料不进入提交或发布附件。
 - 验证通过：`:app:spotlessCheck :app:testOtherDebugUnitTest :app:lintVitalOtherRelease :app:assembleOtherRelease`；118 项 JVM 测试零失败。五个正式 APK 签名均有效且与已发布 v1.1.4 证书相同；版本号/代码已回读确认，生成五包 SHA-256 文件。
-- 手机已覆盖安装 arm64 正式包并保留数据；修复前后的完整 UI/出口验证见下方开发检查点，正式包启动复查尚待手机解锁。
-- 发布准备：五种架构 APK 加 `SHA256SUMS-1.1.5.txt`；发布前核对远端标签和上传附件摘要，完成后更新此检查点。分支 `codex/android-account-integration`，版本及发布文档待本地提交。
+- 手机已覆盖安装 arm64 正式包并保留数据，已回读版本 1.1.5 / 18；修复前后的完整 UI/出口验证见下方开发检查点。手机锁屏，未追加正式包的 VPN 启动验证；未绕过锁屏，临时 UI 文件已删除。
+- 已发布：[GitHub v1.1.5](https://github.com/The-boond/ClashNL/releases/tag/v1.1.5) 为 Latest、非草稿、非预发布；五种架构 APK 加 `SHA256SUMS-1.1.5.txt` 共六个附件。远端文件大小及 SHA-256 全部匹配本地；匿名下载校验文件也与本地一致。保留旧 v1.1.4。
+- 远端版本标签已核验指向 `206e48c92ee864d7b08c2daabcbccfbb0b007f3f`，发布代码已推送至 `codex/android-account-integration`；本次只改 Android 应用/测试/文档，现有 Core 路径限定的 Actions 未触发，未将旧工作流结果当作本次 CI 证据。
+- 剩余边界：下方完整 Lint 与原生仪器测试的环境限制仍适用；正式包锁屏期间未追加 VPN 验证。后续可在解锁手机后复查，发布与隐私核验已完成。当前变更仅为发布完成记录，最终文档提交通过 Git HEAD 查询。
 
 ## 当前开发检查点：仪表盘节点选择（2026-09-19）
 
