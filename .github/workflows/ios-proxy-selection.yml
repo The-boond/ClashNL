@@ -7,6 +7,7 @@ on:
       - "iOS/ApplicationLibrary/Views/Dashboard/Cards/DashboardServiceCard.swift"
       - "iOS/ApplicationLibrary/Views/Groups/**"
       - "iOS/scripts/test-proxy-selection.sh"
+      - "iOS/scripts/build-libbox.sh"
       - "iOS/scripts/tests/**"
       - ".github/workflows/ios-proxy-selection.yml"
   workflow_dispatch:
@@ -22,3 +23,27 @@ jobs:
       - uses: actions/checkout@v4
       - name: Compile and test the production routing resolver
         run: bash iOS/scripts/test-proxy-selection.sh
+
+  simulator-build:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    needs: selection-regression
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.25.12'
+          cache-dependency-path: iOS/Core/clashconv/go.sum
+      - name: Fetch Apple editor dependencies
+        run: git submodule update --init --recursive -- iOS/Frameworks/Runestone
+      - name: Build the pinned core for the simulator
+        env:
+          APPLE_PLATFORM: iossimulator
+        run: bash iOS/scripts/build-libbox.sh
+      - name: Compile the iOS application without signing
+        run: |
+          xcodebuild -project iOS/sing-box.xcodeproj -scheme SFI \
+            -sdk iphonesimulator -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/ClashNLDerivedData" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO build

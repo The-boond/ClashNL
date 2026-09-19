@@ -24,8 +24,8 @@
 ## 验证与发布
 
 - 本地 `go test ./...`（`iOS/Core/clashconv`）通过，`git diff --check` 通过。
-- 新增 `scripts/test-proxy-selection.sh`，编译生产 Swift 路由解析器并运行回归用例，另解析七个接入文件的 Swift 语法；由独立 macOS GitHub Actions 执行，当前待执行。
+- 新增 `scripts/test-proxy-selection.sh`，编译生产 Swift 路由解析器并运行回归用例，另解析七个接入文件的 Swift 语法；[macOS 回归工作流](https://github.com/The-boond/ClashNL/actions/runs/35435395477) 已通过，22 项检查通过。
 - 回归覆盖：首次读取、非默认组选择、嵌套自动组、单成员组、实际模式规则、空/失效/循环选择、JSON5 配置、IPC 脱敏和回复超时竞争。
 - 当前 Windows 没有 Swift/Xcode；没有完整应用编译、签名、模拟器或 iPhone 真机结果。不能将解析器测试当作整包或 VPN 实机验收。
 - 发布目标：`ios-v0.1.0-preview.3` 源码预览版，不提供 IPA，不改变 Android Latest。发布前完成隐私扫描、macOS 测试并核对远端标签；发布后更新此记录。
-- 本轮修改尚未提交。下一步：推送隔离工作分支运行 macOS 测试，通过后快进更新 iOS 分支并发布源码预览。
+- 修复提交 `52c73de` 已推送至隔离工作分支，尚未更新 iOS 发布分支。当前增加无签名 iOS 模拟器编译；`build-libbox.sh` 新增可选 `APPLE_PLATFORM`，CI 只构建模拟器核心，默认完整 Apple 构建不变。下一步：检查编译结果，更新验证边界后发布源码预览。

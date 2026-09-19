@@ -47,7 +47,11 @@ git -C "${CORE_DIR}" apply "${ROOT_DIR}/Core/overlay/experimental/libbox/http_re
 
 (
   cd "${CORE_DIR}"
-  go run ./cmd/internal/build_libbox -target apple
+  build_args=(-target apple)
+  if [[ -n "${APPLE_PLATFORM:-}" ]]; then
+    build_args+=(-platform "${APPLE_PLATFORM}")
+  fi
+  go run ./cmd/internal/build_libbox "${build_args[@]}"
 )
 
 if [[ -d "${CORE_DIR}/Libbox.xcframework" ]]; then
