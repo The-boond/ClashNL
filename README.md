@@ -29,6 +29,8 @@ cd Android
 
 更多说明见 [`Android/README.md`](Android/README.md)。
 
+最新 Android 版本说明：[`v1.1.5`](docs/releases/v1.1.5.md)。
+
 仓库隐私清理状态及发布资料约束见 [`docs/STATUS.md`](docs/STATUS.md)。
 
 ## Apple 平台

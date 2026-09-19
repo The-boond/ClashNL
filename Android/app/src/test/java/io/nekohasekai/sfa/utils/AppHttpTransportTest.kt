@@ -10,15 +10,15 @@ import java.net.UnknownHostException
 class AppHttpTransportTest {
     @Test
     fun `puts IPv4 first when host has A and AAAA records`() {
-        val ipv6 = InetAddress.getByName("2606:4700:3035::ac43:d175")
-        val ipv4 = InetAddress.getByName("104.21.23.63")
+        val ipv6 = InetAddress.getByName("2001:db8::1")
+        val ipv4 = InetAddress.getByName("192.0.2.1")
 
         assertEquals(listOf(ipv4, ipv6), AppHttpTransport.preferIPv4("example.com", listOf(ipv6, ipv4)))
     }
 
     @Test
     fun `keeps NAT64 or IPv6 result when no IPv4 result exists`() {
-        val ipv6 = InetAddress.getByName("2606:4700:3035::ac43:d175")
+        val ipv6 = InetAddress.getByName("2001:db8::1")
 
         assertEquals(listOf(ipv6), AppHttpTransport.preferIPv4("ipv6-only.example", listOf(ipv6)))
     }

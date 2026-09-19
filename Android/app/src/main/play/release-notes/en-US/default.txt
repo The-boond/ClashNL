@@ -1,8 +1,5 @@
-ClashNL Android v1.1.0.
+ClashNL Android v1.1.5.
 
-- Rebuilt around a single native Mihomo runtime.
-- Removed account login, plan purchase, and account synchronization.
-- Import and validate Clash/Mihomo YAML subscriptions directly.
-- Select nodes, run latency tests, and choose Rule/Global/Direct before VPN startup.
-- Switch between Android system proxy and full virtual NIC modes on the dashboard.
-- Fixed public IP routing, offline latency testing, persistence, and startup races.
+- Fixed the dashboard showing a different node after selecting one from the subscription page before VPN startup.
+- Restore saved nodes and proxy mode before reporting the core as running.
+- Resolve the current node from the active default rule and live proxy selection chain.
