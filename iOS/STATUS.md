@@ -32,4 +32,6 @@
 - Swift/构建验证对应代码提交 `eeb0eb84c2363d46983ecb14a699d0e870d2d010`；之后仅更新说明文档。`build-libbox.sh` 新增可选 `APPLE_PLATFORM`，CI 只构建模拟器核心，默认完整 Apple 构建不变。
 - 隐私：当前源码、增量提交及图片差异已检查；没有新增设备截图，未命中已确认的个人 IP、用户名、工作目录或凭据；提交均使用 GitHub noreply 身份。
 - 尚未完成：Apple 签名、iPhone 实机 VPN/出口与后台恢复验证。模拟器编译不能代替这些测试。
-- 发布目标：`ios-v0.1.0-preview.3` 源码预览版，不提供 IPA，不改变 Android Latest。下一步：提交验证记录，快进更新 iOS 分支并创建预览发布，核对远端后补充结果。
+- 已发布：[ios-v0.1.0-preview.3](https://github.com/The-boond/ClashNL/releases/tag/ios-v0.1.0-preview.3)，非草稿、Pre-release，提供 GitHub 源码归档，不提供 IPA。远端标签已核验指向 `1fce779e3b3c75f4e9f97757259c87290e85e4ac`；与通过构建的 `eeb0eb8` 相比仅有两份文档变更。
+- `ios/preview-0.1.0` 已快进更新，没有合并 Android 分支或创建 PR；Android 最新正式版仍为 `v1.1.5`。当前剩余变更仅为发布结果记录，最终文档提交通过 Git HEAD 查询。
+- 后续：在签名后的 iPhone 上按 Preview 3 发布说明完成真实 VPN/节点/出口验证；源码修复、构建失败修复和 GitHub 发布已完成。
